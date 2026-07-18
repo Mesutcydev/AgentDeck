@@ -1,0 +1,109 @@
+#!/usr/bin/env python3 -u
+"""AgentDeck test fixture — Zed-lineage ACP stand-in (§24)."""
+
+from __future__ import annotations
+
+import json
+import sys
+import uuid
+
+
+def respond(obj: dict) -> None:
+    sys.stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def notify(method: str, params: dict) -> None:
+    respond({"jsonrpc": "2.0", "method": method, "params": params})
+
+
+def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--version":
+        print("test-acp 1.0.0-fixture")
+        return 0
+
+    if len(sys.argv) < 2 or sys.argv[1] != "acp":
+        return 1
+
+    session_id = "fixture-acp-session-1"
+    permission_id = 9001
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        method = message.get("method")
+        req_id = message.get("id")
+
+        if method == "initialize":
+            respond({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": 1,
+                    "agentInfo": {"name": "test-acp", "version": "1.0.0-fixture"},
+                },
+            })
+            continue
+
+        if method == "session/new":
+            respond({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"sessionId": session_id},
+            })
+            continue
+
+        if method == "session/prompt":
+            params = message.get("params") or {}
+            prompt = params.get("prompt") or []
+            text = ""
+            if prompt and isinstance(prompt[0], dict):
+                text = prompt[0].get("text", "")
+            notify("session/update", {
+                "updateType": "agent_message_chunk",
+                "text": f"Echo: {text}",
+            })
+            respond({
+                "jsonrpc": "2.0",
+                "method": "session/request_permission",
+                "id": permission_id,
+                "params": {
+                    "tool": "shell",
+                    "action": "echo fixture-permission",
+                    "explanation": "Fixture ACP permission for AgentDeck tests",
+                },
+            })
+            permission_id += 1
+            respond({
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"stopReason": "end_turn"},
+            })
+            continue
+
+        if method == "session/cancel":
+            notify("session/update", {"updateType": "turn_completed"})
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"ok": True}})
+            continue
+
+        if method == "session/load":
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"sessionId": session_id}})
+            continue
+
+        if req_id is not None and "result" in message:
+            outcome = (message.get("result") or {}).get("outcome")
+            approved = outcome == "approved"
+            notify("session/update", {"updateType": "turn_completed" if approved else "completed"})
+            continue
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

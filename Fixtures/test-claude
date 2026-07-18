@@ -1,0 +1,210 @@
+#!/usr/bin/env python3 -u
+"""AgentDeck Phase 7 Claude fixture: stream-json + PTY fallback."""
+
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+
+def emit(obj: dict) -> None:
+    sys.stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def parse_args(argv: list[str]) -> dict:
+    result = {
+        "prompt": "",
+        "session_id": None,
+        "resume_id": None,
+        "model": None,
+        "print_mode": False,
+        "output_format": None,
+    }
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "-p":
+            result["print_mode"] = True
+            index += 1
+            continue
+        if token == "--output-format" and index + 1 < len(argv):
+            result["output_format"] = argv[index + 1]
+            index += 2
+            continue
+        if token == "--session-id" and index + 1 < len(argv):
+            result["session_id"] = argv[index + 1]
+            index += 2
+            continue
+        if token == "--resume" and index + 1 < len(argv):
+            result["resume_id"] = argv[index + 1]
+            index += 2
+            continue
+        if token == "--model" and index + 1 < len(argv):
+            result["model"] = argv[index + 1]
+            index += 2
+            continue
+        if token.startswith("-"):
+            if index + 1 < len(argv) and not argv[index + 1].startswith("-") and token in {
+                "--permission-mode",
+                "--verbose",
+                "--include-partial-messages",
+            }:
+                index += 2
+            else:
+                index += 1
+            continue
+        result["prompt"] = token
+        index += 1
+    return result
+
+
+def home_settings_path() -> pathlib.Path:
+    return pathlib.Path(os.environ.get("HOME", str(pathlib.Path.home()))) / ".claude" / "settings.json"
+
+
+def load_settings() -> dict:
+    path = home_settings_path()
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def matcher_matches(matcher: str, tool_name: str) -> bool:
+    if not matcher or matcher == ".*":
+        return True
+    parts = [part for part in re.split(r"[|,]", matcher) if part]
+    if tool_name in parts:
+        return True
+    try:
+        return re.fullmatch(matcher, tool_name) is not None
+    except re.error:
+        return False
+
+
+def extract_pretool_commands(settings: dict, tool_name: str) -> list[str]:
+    hooks = settings.get("hooks") or {}
+    groups = hooks.get("PreToolUse") or []
+    commands: list[str] = []
+    for group in groups:
+        matcher = group.get("matcher", "")
+        if not matcher_matches(matcher, tool_name):
+            continue
+        for hook in group.get("hooks") or []:
+            if hook.get("type") == "command" and hook.get("command"):
+                commands.append(hook["command"])
+    return commands
+
+
+def decision_priority(value: str | None) -> int:
+    order = {"deny": 4, "defer": 3, "ask": 2, "allow": 1, None: 0}
+    return order.get(value, 0)
+
+
+def run_pretool_hooks(session_id: str, cwd: str, tool_name: str, tool_input: dict) -> dict | None:
+    payload = {
+        "session_id": session_id,
+        "cwd": cwd,
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool_name,
+        "tool_input": tool_input,
+    }
+    best: dict | None = None
+    for command in extract_pretool_commands(load_settings(), tool_name):
+        completed = subprocess.run(
+            command,
+            input=json.dumps(payload, separators=(",", ":")),
+            text=True,
+            shell=True,
+            capture_output=True,
+            env=os.environ.copy(),
+        )
+        stdout = completed.stdout.strip()
+        if not stdout:
+            continue
+        line = stdout.splitlines()[-1]
+        result = json.loads(line)
+        decision = ((result.get("hookSpecificOutput") or {}).get("permissionDecision"))
+        candidate = {
+            "decision": decision,
+            "reason": ((result.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""),
+        }
+        if best is None or decision_priority(candidate["decision"]) > decision_priority(best["decision"]):
+            best = candidate
+    return best
+
+
+def run_stream_json(parsed: dict) -> int:
+    session_id = parsed["resume_id"] or parsed["session_id"] or "fixture-session"
+    prompt = parsed["prompt"]
+    resumed = parsed["resume_id"] is not None
+    emit({
+        "type": "system",
+        "subtype": "init",
+        "session_id": session_id,
+        "model": parsed["model"] or "fixture-claude",
+        "cwd": os.getcwd(),
+    })
+    intro = "Resumed: " if resumed else "Started: "
+    emit({
+        "type": "stream_event",
+        "session_id": session_id,
+        "event": {"delta": {"type": "text_delta", "text": intro + prompt}},
+    })
+
+    tool_input = {"command": "echo fixture-approval"}
+    decision = run_pretool_hooks(session_id, os.getcwd(), "Bash", tool_input)
+    if decision and decision.get("decision") == "deny":
+        emit({
+            "type": "result",
+            "subtype": "error",
+            "session_id": session_id,
+            "is_error": True,
+            "error": decision.get("reason") or "Denied by PreToolUse hook",
+            "result": "",
+        })
+        return 0
+
+    emit({
+        "type": "stream_event",
+        "session_id": session_id,
+        "event": {"delta": {"type": "text_delta", "text": " Approval granted."}},
+    })
+    emit({
+        "type": "result",
+        "subtype": "success",
+        "session_id": session_id,
+        "is_error": False,
+        "duration_ms": 7,
+        "result": ("resumed " if resumed else "completed ") + prompt,
+    })
+    return 0
+
+
+def run_pty(parsed: dict) -> int:
+    prompt = parsed["prompt"]
+    resumed = parsed["resume_id"] is not None
+    prefix = "RESUMED" if resumed else "FALLBACK"
+    sys.stdout.write(f"{prefix}: {prompt}\n")
+    sys.stdout.write("terminal fallback output\n")
+    sys.stdout.flush()
+    return 0
+
+
+def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--version":
+        print("test-claude 1.0.0-fixture")
+        return 0
+
+    parsed = parse_args(sys.argv[1:])
+    if parsed["print_mode"] and parsed["output_format"] == "stream-json":
+        return run_stream_json(parsed)
+    return run_pty(parsed)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

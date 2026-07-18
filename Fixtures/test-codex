@@ -1,0 +1,7 @@
+#!/bin/sh
+# AgentDeck test fixture — deterministic Codex stand-in (§24).
+if [ "$1" = "--version" ]; then
+  printf '%s\n' "test-codex 1.0.0-fixture"
+  exit 0
+fi
+exit 1

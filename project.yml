@@ -1,0 +1,157 @@
+name: AgentDeck
+options:
+  bundleIdPrefix: com.agentdeck
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  # Matches objectVersion 77 in the committed project.pbxproj (Xcode 16
+  # project format); the pinned build toolchain is newer (ARCHITECTURE.md).
+  xcodeVersion: "16.0"
+  groupSortPosition: top
+  generateEmptyDirectories: false
+
+# Project-default Swift language mode; targets inherit it.
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+
+packages:
+  Shared:
+    path: Packages/Shared
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm.git
+    exactVersion: 1.13.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.4
+
+targets:
+  Companion:
+    type: application
+    platform: macOS
+    sources:
+      - path: Companion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agentdeck.companion
+        PRODUCT_NAME: AgentDeck Companion
+        PRODUCT_MODULE_NAME: Companion
+        DEVELOPMENT_TEAM: PUH4GMFV56
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 AgentDeck. All rights reserved."
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_CFBundleDisplayName: AgentDeck
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_VERSION: "6.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - package: Shared
+      - package: Sparkle
+        product: Sparkle
+
+  CompanionTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CompanionTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agentdeck.companion.tests
+        PRODUCT_NAME: CompanionTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AgentDeck Companion.app/Contents/MacOS/AgentDeck Companion
+    dependencies:
+      - target: Companion
+      - package: Shared
+
+  App:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agentdeck.app
+        DEVELOPMENT_TEAM: PUH4GMFV56
+        PRODUCT_NAME: AgentDeck
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        INFOPLIST_KEY_CFBundleDisplayName: AgentDeck
+        INFOPLIST_KEY_NSCameraUsageDescription: "Scan the pairing QR code shown in the AgentDeck companion on your Mac."
+        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App/App.entitlements
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "AgentDeck connects to your paired Mac companion to stream and control local coding-agent sessions."
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APS_ENVIRONMENT: development
+      configs:
+        Release:
+          APS_ENVIRONMENT: production
+    dependencies:
+      - package: Shared
+      - package: SwiftTerm
+        product: SwiftTerm
+      - target: WidgetExtension
+
+  WidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: WidgetExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agentdeck.app.widget
+        DEVELOPMENT_TEAM: PUH4GMFV56
+        PRODUCT_NAME: WidgetExtension
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        INFOPLIST_FILE: WidgetExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: WidgetExtension/WidgetExtension.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - package: Shared
+
+schemes:
+  Companion:
+    build:
+      targets:
+        Companion: all
+    test:
+      targets:
+        - name: CompanionTests
+          parallelizable: false
+  App:
+    build:
+      targets:
+        App: all

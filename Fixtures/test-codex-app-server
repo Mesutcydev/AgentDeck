@@ -1,0 +1,95 @@
+#!/usr/bin/env python3 -u
+"""AgentDeck test fixture — deterministic Codex app-server stand-in (§24)."""
+
+from __future__ import annotations
+
+import json
+import sys
+
+
+def respond(obj: dict) -> None:
+    sys.stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def notify(method: str, params: dict) -> None:
+    respond({"jsonrpc": "2.0", "method": method, "params": params})
+
+
+def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--version":
+        print("test-codex-app-server 1.0.0-fixture")
+        return 0
+
+    if len(sys.argv) < 2 or sys.argv[1] != "app-server":
+        return 1
+
+    thread_id = "fixture-thread-1"
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        method = message.get("method")
+        req_id = message.get("id")
+
+        if method == "initialize":
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"capabilities": {}}})
+            continue
+
+        if method == "thread/start":
+            notify("thread/started", {"threadId": thread_id})
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"threadId": thread_id}})
+            continue
+
+        if method == "turn/start":
+            params = message.get("params") or {}
+            text = (params.get("input") or {}).get("text", "")
+            notify("turn/agentMessageDelta", {"delta": f"Echo: {text}"})
+            notify(
+                "approval/request",
+                {
+                    "requestId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                    "tool": "shell",
+                    "action": "echo fixture-approval",
+                    "explanation": "Fixture approval for AgentDeck tests",
+                },
+            )
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"status": "started"}})
+            continue
+
+        if method == "approval/respond":
+            decision = (message.get("params") or {}).get("decision")
+            approved = decision == "approved"
+            notify("turn/completed", {"success": approved})
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"ok": True}})
+            continue
+
+        if method == "turn/cancel":
+            notify("turn/completed", {"success": False})
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"ok": True}})
+            continue
+
+        if method == "thread/resume":
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"threadId": thread_id}})
+            continue
+
+        if req_id is not None:
+            respond(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32601, "message": f"unknown method {method}"},
+                }
+            )
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

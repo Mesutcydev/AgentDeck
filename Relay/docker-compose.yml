@@ -1,0 +1,27 @@
+# §14.3 notification relay (ADR-0020).
+#
+# The relay speaks plain HTTP/1 with Ed25519-signed bodies. Publishing it
+# beyond loopback REQUIRES TLS termination in front (e.g. a reverse proxy
+# with a valid certificate) — the compose default binds localhost only.
+services:
+  agentdeck-relay:
+    build:
+      context: ..
+      dockerfile: Relay/Dockerfile
+    ports:
+      # Loopback only; put a TLS-terminating proxy in front for remote use.
+      - "127.0.0.1:8787:8787"
+    environment:
+      PORT: "8787"
+      # 0.0.0.0 inside the container so the loopback-published port above
+      # is reachable; the publish binding is what limits exposure.
+      RELAY_HOST: "0.0.0.0"
+      # Required — the relay refuses to start without it (no default).
+      # Base64 Ed25519 public key from the Mac companion.
+      RELAY_SIGNING_PUBLIC_KEY: "${RELAY_SIGNING_PUBLIC_KEY:?set RELAY_SIGNING_PUBLIC_KEY to the base64 Ed25519 public key}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
