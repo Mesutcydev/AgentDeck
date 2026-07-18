@@ -11,15 +11,19 @@
 		0A7FBD13F2F908E8A9206E8B /* TerminalEngineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5AFA80A755998A3E37C5454 /* TerminalEngineView.swift */; };
 		0DF124A8979AB781751DB765 /* CompanionDeckTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73158F0BA8F1D56D775BBA40 /* CompanionDeckTheme.swift */; };
 		14B48B817C90E9AEE9B67E37 /* ApprovalInterimView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E0A075D7FD23319728834C /* ApprovalInterimView.swift */; };
+		1687AA8AAAC074134A8B16D9 /* IOSOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A344CA84573015EF80429C8 /* IOSOnboardingView.swift */; };
 		16C6CDAF01BCE1D45699BD4C /* SessionMemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E2DEDFEC0B4B325ABA9877 /* SessionMemoryView.swift */; };
 		188C3F2E205216F46EDDF0BF /* SparkleUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528A25304BC6CCFCF521B4EC /* SparkleUpdateController.swift */; };
 		18A64A7B8560AE3A1F659A57 /* AgentDeckWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1C890020B07FF5C489A774 /* AgentDeckWidget.swift */; };
 		1C52664134F872744FB9A995 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D7349CFBFBCF178F3415A8 /* MainTabView.swift */; };
+		1D6314EA2AA7F8CD7F8B3AD9 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB6D31133B7258D4C8BFD58 /* PaywallView.swift */; };
+		21511703A7AB9E8418FF0BF7 /* DeckMarqueeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830B9D899A86331A0DBB56FF /* DeckMarqueeText.swift */; };
 		2C179496940FF223DFB93804 /* CompanionSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A93456DA879DE6F9E7A4AB3 /* CompanionSessionService.swift */; };
 		2CF4FBFA7E01A9F8948CCBC4 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E226A65B9A81DF37353673 /* SessionTimelineView.swift */; };
 		2D7293DC4B3F2384584C90B9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C69A32E886930B15110451B8 /* SettingsView.swift */; };
 		2E5ADCB936CF68A74C7AD451 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = CB42A72C9C793D30CFFE0ED4 /* Shared */; };
 		353ABCAFAC052F2029E7656D /* RawOutputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55ED25181B87DD311D2786FD /* RawOutputView.swift */; };
+		388D3683A754D173CFF4802A /* ConnectionServiceDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B97F320B34185E45667C8F6 /* ConnectionServiceDetector.swift */; };
 		38DDAA4AF41D54BACE308605 /* StateSyncMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F77DB5934C4CB2D7247D32D /* StateSyncMirror.swift */; };
 		3B076D7E19FB70D45205D6D3 /* WidgetSummaryPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C41DC0769F70758FD91C669 /* WidgetSummaryPublisher.swift */; };
 		3BB42F29FBBC33B55C392307 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF13EDACF784401367535B46 /* LoginItemManager.swift */; };
@@ -52,6 +56,7 @@
 		9F43222965442AD4934412D0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0C4A2569C1C792935C1D21C /* Assets.xcassets */; };
 		A3D381A49CC07B6391D47811 /* AgentDeckSplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460D40CD4ACE1450703E6833 /* AgentDeckSplashView.swift */; };
 		AEC51DBBB355D3EE79D57CA4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8F7D4C56F9971A664D36BCFD /* PrivacyInfo.xcprivacy */; };
+		AF4DB75025D5FC1470EF2CB4 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B73BEFB6EC13F93FA48AC41 /* SubscriptionManager.swift */; };
 		B13A6AD9A9146E66C8771045 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53C1ABCEB2892B153D46AC1C /* ContentView.swift */; };
 		BF672145101EACAFC0495289 /* IOSRemoteConnectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4D1E6B9FC8D35290219EB1C /* IOSRemoteConnectionService.swift */; };
 		C06F594C58255741FDBD9DF7 /* TerminalStreamSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97F4FC269FA3E6E1E0A0650 /* TerminalStreamSupport.swift */; };
@@ -60,6 +65,8 @@
 		CDF08CB8EA717AA60B918ECF /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55754D83C04DA0545E258A0C /* HomeView.swift */; };
 		D270CBD649C7DCDCB855E5D8 /* FolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70394754FC28DFC65E70334 /* FolderPicker.swift */; };
 		D7C9BA3B818A276E85CCBF33 /* GitDiffMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EC031BC9E4ACD0BBAB4AAE8 /* GitDiffMirror.swift */; };
+		DDD2DCEB39F446108F7B57B7 /* CompanionUserGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2C235DFE6AE9249D67EA98 /* CompanionUserGuideView.swift */; };
+		EE2464D244D2E8EFF9E24EE4 /* ConnectionServiceDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50090B3AA71E2F8085A8C214 /* ConnectionServiceDetectorTests.swift */; };
 		EE3871496920A8792C2C8DEB /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 36412401D435E8C3DA79E8E2 /* SwiftTerm */; };
 		F75890D65BA850F34265FABB /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF128DCA663E2C515A6A8112 /* SessionView.swift */; };
 		F76C2B62200B0BA1C7912FA5 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F56A0467D20F790214F9A67 /* AppStateTests.swift */; };
@@ -99,10 +106,12 @@
 
 /* Begin PBXFileReference section */
 		05A516313A34B0E3DAC15D99 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		0B2C235DFE6AE9249D67EA98 /* CompanionUserGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionUserGuideView.swift; sourceTree = "<group>"; };
 		0BB62DDDC9499D529E7267AB /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		13526B2F1E5B9CA838CBAD90 /* CompanionConfirmationDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionConfirmationDelegate.swift; sourceTree = "<group>"; };
 		147FE32CB211F70F6C8419FF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		149DE7D1A5A3D463FF015C88 /* TerminalKeyboardAccessoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalKeyboardAccessoryView.swift; sourceTree = "<group>"; };
+		1CB6D31133B7258D4C8BFD58 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		229BBF8DA2E5CBEBCB90593B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		22E226A65B9A81DF37353673 /* SessionTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineView.swift; sourceTree = "<group>"; };
 		2963035763F22FF821693389 /* WidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WidgetExtension.entitlements; sourceTree = "<group>"; };
@@ -115,6 +124,7 @@
 		3F56A0467D20F790214F9A67 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		460D40CD4ACE1450703E6833 /* AgentDeckSplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDeckSplashView.swift; sourceTree = "<group>"; };
 		4B47EB909C2670A8390A71DB /* LoginItemLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemLiveTests.swift; sourceTree = "<group>"; };
+		50090B3AA71E2F8085A8C214 /* ConnectionServiceDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionServiceDetectorTests.swift; sourceTree = "<group>"; };
 		514C6386804671C718573D74 /* CompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51E3DF4CB045F06065925C49 /* AttachmentTransferCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentTransferCoordinator.swift; sourceTree = "<group>"; };
 		528A25304BC6CCFCF521B4EC /* SparkleUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateController.swift; sourceTree = "<group>"; };
@@ -123,18 +133,23 @@
 		55ED25181B87DD311D2786FD /* RawOutputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawOutputView.swift; sourceTree = "<group>"; };
 		59357F10E7C5532087C691C0 /* App.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F77DB5934C4CB2D7247D32D /* StateSyncMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateSyncMirror.swift; sourceTree = "<group>"; };
+		621F9F2FDAD61AD1C51A4C53 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		63A2CB039533BF6EC7CA64CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6A344CA84573015EF80429C8 /* IOSOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOnboardingView.swift; sourceTree = "<group>"; };
 		6A3E8652AB14252DEDE4EB1C /* DiagnosticsExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsExportTests.swift; sourceTree = "<group>"; };
 		6BC02E18E3EE1EA31BA97FDA /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
 		73158F0BA8F1D56D775BBA40 /* CompanionDeckTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionDeckTheme.swift; sourceTree = "<group>"; };
 		744F8CE7C908DA903946A001 /* TerminalSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionModel.swift; sourceTree = "<group>"; };
 		79E0A075D7FD23319728834C /* ApprovalInterimView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalInterimView.swift; sourceTree = "<group>"; };
 		7EC031BC9E4ACD0BBAB4AAE8 /* GitDiffMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDiffMirror.swift; sourceTree = "<group>"; };
+		830B9D899A86331A0DBB56FF /* DeckMarqueeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckMarqueeText.swift; sourceTree = "<group>"; };
+		8B73BEFB6EC13F93FA48AC41 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 		8EB5E2DBEC06CF5208759CE4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		8EFF44AF0249E19C2A1B57CC /* IOSAppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAppState.swift; sourceTree = "<group>"; };
 		8F7D4C56F9971A664D36BCFD /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		91F395842D197FA68A655FF8 /* SessionsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsListView.swift; sourceTree = "<group>"; };
 		9A93456DA879DE6F9E7A4AB3 /* CompanionSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionSessionService.swift; sourceTree = "<group>"; };
+		9B97F320B34185E45667C8F6 /* ConnectionServiceDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionServiceDetector.swift; sourceTree = "<group>"; };
 		A0C4A2569C1C792935C1D21C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1D04DABBF0E6515B045F4D1 /* RiskBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskBadgeView.swift; sourceTree = "<group>"; };
 		A1E2DEDFEC0B4B325ABA9877 /* SessionMemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionMemoryView.swift; sourceTree = "<group>"; };
@@ -207,12 +222,15 @@
 				229BBF8DA2E5CBEBCB90593B /* Assets.xcassets */,
 				51E3DF4CB045F06065925C49 /* AttachmentTransferCoordinator.swift */,
 				53C1ABCEB2892B153D46AC1C /* ContentView.swift */,
+				830B9D899A86331A0DBB56FF /* DeckMarqueeText.swift */,
 				BF9658269A252C13D6D7EB80 /* DeckTheme.swift */,
 				55754D83C04DA0545E258A0C /* HomeView.swift */,
 				05A516313A34B0E3DAC15D99 /* Info.plist */,
 				8EFF44AF0249E19C2A1B57CC /* IOSAppState.swift */,
+				6A344CA84573015EF80429C8 /* IOSOnboardingView.swift */,
 				D4D1E6B9FC8D35290219EB1C /* IOSRemoteConnectionService.swift */,
 				F4D7349CFBFBCF178F3415A8 /* MainTabView.swift */,
+				1CB6D31133B7258D4C8BFD58 /* PaywallView.swift */,
 				147FE32CB211F70F6C8419FF /* PrivacyInfo.xcprivacy */,
 				6BC02E18E3EE1EA31BA97FDA /* PushNotificationManager.swift */,
 				55ED25181B87DD311D2786FD /* RawOutputView.swift */,
@@ -222,6 +240,7 @@
 				EF128DCA663E2C515A6A8112 /* SessionView.swift */,
 				B15B9A5539D29798A2491C18 /* SettingsTabView.swift */,
 				5F77DB5934C4CB2D7247D32D /* StateSyncMirror.swift */,
+				8B73BEFB6EC13F93FA48AC41 /* SubscriptionManager.swift */,
 				A5AFA80A755998A3E37C5454 /* TerminalEngineView.swift */,
 				149DE7D1A5A3D463FF015C88 /* TerminalKeyboardAccessoryView.swift */,
 				744F8CE7C908DA903946A001 /* TerminalSessionModel.swift */,
@@ -257,6 +276,7 @@
 			isa = PBXGroup;
 			children = (
 				3F56A0467D20F790214F9A67 /* AppStateTests.swift */,
+				50090B3AA71E2F8085A8C214 /* ConnectionServiceDetectorTests.swift */,
 				6A3E8652AB14252DEDE4EB1C /* DiagnosticsExportTests.swift */,
 				4B47EB909C2670A8390A71DB /* LoginItemLiveTests.swift */,
 			);
@@ -292,9 +312,12 @@
 				13526B2F1E5B9CA838CBAD90 /* CompanionConfirmationDelegate.swift */,
 				73158F0BA8F1D56D775BBA40 /* CompanionDeckTheme.swift */,
 				9A93456DA879DE6F9E7A4AB3 /* CompanionSessionService.swift */,
+				0B2C235DFE6AE9249D67EA98 /* CompanionUserGuideView.swift */,
+				9B97F320B34185E45667C8F6 /* ConnectionServiceDetector.swift */,
 				DF405FB16354B6AF68CE945B /* DiagnosticsExporter.swift */,
 				B70394754FC28DFC65E70334 /* FolderPicker.swift */,
 				7EC031BC9E4ACD0BBAB4AAE8 /* GitDiffMirror.swift */,
+				621F9F2FDAD61AD1C51A4C53 /* Info.plist */,
 				BF13EDACF784401367535B46 /* LoginItemManager.swift */,
 				0BB62DDDC9499D529E7267AB /* MenuBarContentView.swift */,
 				B0AF011CD474F22947D1B082 /* OnboardingView.swift */,
@@ -485,6 +508,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F76C2B62200B0BA1C7912FA5 /* AppStateTests.swift in Sources */,
+				EE2464D244D2E8EFF9E24EE4 /* ConnectionServiceDetectorTests.swift in Sources */,
 				CAED4F1733F7F8593297CB7E /* DiagnosticsExportTests.swift in Sources */,
 				FC52FF72C1CBAF9559079DAA /* LoginItemLiveTests.swift in Sources */,
 			);
@@ -508,6 +532,8 @@
 				C598BDFF7B731A459B24CC48 /* CompanionConfirmationDelegate.swift in Sources */,
 				0DF124A8979AB781751DB765 /* CompanionDeckTheme.swift in Sources */,
 				2C179496940FF223DFB93804 /* CompanionSessionService.swift in Sources */,
+				DDD2DCEB39F446108F7B57B7 /* CompanionUserGuideView.swift in Sources */,
+				388D3683A754D173CFF4802A /* ConnectionServiceDetector.swift in Sources */,
 				53939685A8B22EED2E020E8B /* DiagnosticsExporter.swift in Sources */,
 				D270CBD649C7DCDCB855E5D8 /* FolderPicker.swift in Sources */,
 				D7C9BA3B818A276E85CCBF33 /* GitDiffMirror.swift in Sources */,
@@ -533,11 +559,14 @@
 				14B48B817C90E9AEE9B67E37 /* ApprovalInterimView.swift in Sources */,
 				50B08AA5F6F05321C8C1ACDD /* AttachmentTransferCoordinator.swift in Sources */,
 				B13A6AD9A9146E66C8771045 /* ContentView.swift in Sources */,
+				21511703A7AB9E8418FF0BF7 /* DeckMarqueeText.swift in Sources */,
 				8CE9287B611EC3114A059EE3 /* DeckTheme.swift in Sources */,
 				CDF08CB8EA717AA60B918ECF /* HomeView.swift in Sources */,
 				80F925402F3355839E75C138 /* IOSAppState.swift in Sources */,
+				1687AA8AAAC074134A8B16D9 /* IOSOnboardingView.swift in Sources */,
 				BF672145101EACAFC0495289 /* IOSRemoteConnectionService.swift in Sources */,
 				1C52664134F872744FB9A995 /* MainTabView.swift in Sources */,
+				1D6314EA2AA7F8CD7F8B3AD9 /* PaywallView.swift in Sources */,
 				8164800F6076DA71CCFCF94E /* PushNotificationManager.swift in Sources */,
 				353ABCAFAC052F2029E7656D /* RawOutputView.swift in Sources */,
 				7273D6680F395141E70FE84E /* RiskBadgeView.swift in Sources */,
@@ -546,6 +575,7 @@
 				407C554D39B38E16AD25DE19 /* SessionsListView.swift in Sources */,
 				4FD332FB41F4573AC8B0191D /* SettingsTabView.swift in Sources */,
 				38DDAA4AF41D54BACE308605 /* StateSyncMirror.swift in Sources */,
+				AF4DB75025D5FC1470EF2CB4 /* SubscriptionManager.swift in Sources */,
 				0A7FBD13F2F908E8A9206E8B /* TerminalEngineView.swift in Sources */,
 				85F3EEE1755C9A3B3C4C7DBB /* TerminalKeyboardAccessoryView.swift in Sources */,
 				631673986021D2CFB6A9DC5B /* TerminalSessionModel.swift in Sources */,
@@ -577,7 +607,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -674,7 +704,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WidgetExtension/Info.plist;
@@ -703,7 +733,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
@@ -737,10 +767,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Companion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AgentDeck;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -824,7 +855,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WidgetExtension/Info.plist;
@@ -895,10 +926,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = PUH4GMFV56;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Companion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AgentDeck;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";

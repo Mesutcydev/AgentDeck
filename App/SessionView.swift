@@ -70,7 +70,7 @@ struct SessionView: View {
             case .terminal:
                 terminalSurface
             case .rawOutput:
-                RawOutputView(text: model.rawOutputText)
+                RawOutputView(text: model.rawOutputText, theme: theme)
             case .diffs:
                 diffSurface
             }
@@ -95,27 +95,6 @@ struct SessionView: View {
         .background { theme.workspaceBackground.ignoresSafeArea() }
         .tint(theme.accent)
         .sensoryFeedback(.selection, trigger: surface)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                HStack(spacing: DeckSpace.xs) {
-                    DeckMark(size: 18, color: DeckColor.accent)
-                    Text(agentDisplayName)
-                        .font(DeckFont.footnote.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        composerFocused = false
-                        DeckHaptics.light()
-                    } label: {
-                        Label("Hide Keyboard", systemImage: "keyboard.chevron.compact.down")
-                            .font(DeckFont.footnote.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DeckColor.ink)
-                    .accessibilityHint("Dismisses the keyboard without sending the message")
-                }
-            }
-        }
         .navigationTitle("Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(theme.workspaceBackground, for: .navigationBar)
@@ -268,6 +247,9 @@ struct SessionView: View {
             // Reattach on every entry: the companion replays scrollback,
             // then live output continues.
             await state.attachTerminal(sessionID: session.id)
+            // Attach can race the first UIKit layout callback. Re-assert the
+            // remembered geometry after the host knows this PTY subscriber.
+            model.resendCurrentSize()
         }
     }
 
@@ -296,6 +278,22 @@ struct SessionView: View {
                 .foregroundStyle(theme.workspaceText)
                 .colorScheme(theme.usesProviderSkin ? .dark : .light)
                 .focused($composerFocused)
+            if composerFocused {
+                Button {
+                    composerFocused = false
+                    DeckHaptics.light()
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(theme.workspaceText)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Hide Keyboard")
+                .accessibilityHint("Dismisses the keyboard without sending the message")
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
             Button {
                 sendComposerMessage()
             } label: {
@@ -314,6 +312,7 @@ struct SessionView: View {
         .padding(.vertical, DeckSpace.xs)
         .background(theme.workspaceSurface)
         .overlay(alignment: .top) { Rectangle().fill(theme.workspaceRule).frame(height: 0.75) }
+        .animation(DeckMotion.quick, value: composerFocused)
         .disabled(session.state.isTerminal)
         .opacity(session.state.isTerminal ? 0.5 : 1)
     }

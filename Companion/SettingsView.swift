@@ -29,10 +29,26 @@ struct SettingsView: View {
                 .padding(16)
                 .overlay(alignment: .bottom) { Rectangle().fill(CompanionDeckColor.rule).frame(height: 1) }
 
-                List(SettingsSection.allCases, selection: $selection) { section in
-                    Label(section.title, systemImage: section.symbol)
-                        .font(.system(size: 12, weight: .medium))
-                        .tag(section)
+                List(SettingsSection.allCases) { section in
+                    Button {
+                        selection = section
+                    } label: {
+                        Label(section.title, systemImage: section.symbol)
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(
+                        selection == section ? Color.accentColor : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 7)
+                    )
+                    .foregroundStyle(selection == section ? Color.white : CompanionDeckColor.ink)
+                    .contentShape(Rectangle())
+                    .listRowInsets(.init(top: 1, leading: 8, bottom: 1, trailing: 8))
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
@@ -48,6 +64,7 @@ struct SettingsView: View {
             }
             .background(CompanionDeckColor.canvas)
         }
+        .toolbar(removing: .sidebarToggle)
         .frame(width: 820, height: 560)
         .foregroundStyle(CompanionDeckColor.ink)
         .tint(CompanionDeckColor.signal)
@@ -65,23 +82,24 @@ struct SettingsView: View {
         case .notifications: NotificationsPane(state: state)
         case .security: SecurityPane()
         case .diagnostics: DiagnosticsSettingsPane(state: state)
+        case .guide: CompanionUserGuidePane()
         case .about: AboutPane()
         }
     }
 }
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, devices, projects, agents, connections, permissions, notifications, security, diagnostics, about
+    case general, devices, projects, agents, connections, permissions, notifications, security, diagnostics, guide, about
     var id: String { rawValue }
     var title: String { switch self {
-        case .general: "General"; case .devices: "Paired Devices"; case .projects: "Projects"; case .agents: "Agents"; case .connections: "Connections"; case .permissions: "Permission Policies"; case .notifications: "Notifications"; case .security: "Security"; case .diagnostics: "Diagnostics"; case .about: "About"
+        case .general: "General"; case .devices: "Paired Devices"; case .projects: "Projects"; case .agents: "Agents"; case .connections: "Connections"; case .permissions: "Permission Policies"; case .notifications: "Notifications"; case .security: "Security"; case .diagnostics: "Diagnostics"; case .guide: "User Guide"; case .about: "About"
     } }
     var symbol: String { switch self {
-        case .general: "gear"; case .devices: "iphone"; case .projects: "folder"; case .agents: "cpu"; case .connections: "network"; case .permissions: "checkmark.shield"; case .notifications: "bell"; case .security: "lock.shield"; case .diagnostics: "stethoscope"; case .about: "info.circle"
+        case .general: "gear"; case .devices: "iphone"; case .projects: "folder"; case .agents: "cpu"; case .connections: "network"; case .permissions: "checkmark.shield"; case .notifications: "bell"; case .security: "lock.shield"; case .diagnostics: "stethoscope"; case .guide: "book.pages"; case .about: "info.circle"
     } }
     var index: String { String(format: "%02d / SETTINGS", (Self.allCases.firstIndex(of: self) ?? 0) + 1) }
     var detail: String { switch self {
-        case .general: "Choose startup and remote-access behavior."; case .devices: "Manage authenticated phones and tablets."; case .projects: "Control exactly which folders agents may access."; case .agents: "Inspect real CLI discovery and installation state."; case .connections: "Review active local and remote transport paths."; case .permissions: "Understand the trust scopes enforced on this Mac."; case .notifications: "Configure redacted background approval alerts."; case .security: "Inspect local key and authentication boundaries."; case .diagnostics: "Export a redacted operational report."; case .about: "Build identity and product role."
+        case .general: "Choose startup and remote-access behavior."; case .devices: "Manage authenticated phones and tablets."; case .projects: "Control exactly which folders agents may access."; case .agents: "Inspect real CLI discovery and installation state."; case .connections: "Review active local and remote transport paths."; case .permissions: "Understand the trust scopes enforced on this Mac."; case .notifications: "Configure redacted background approval alerts."; case .security: "Inspect local key and authentication boundaries."; case .diagnostics: "Export a redacted operational report."; case .guide: "Learn the complete pairing and agent-control workflow."; case .about: "Build identity and product role."
     } }
 }
 

@@ -156,6 +156,13 @@ struct SessionsListView: View {
                     } label: {
                         Label("Stop", systemImage: "stop.circle")
                     }
+                } else {
+                    Button(role: .destructive) {
+                        DeckHaptics.warning()
+                        Task { await state.deleteSession(session) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }

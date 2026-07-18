@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>AgentDeck Companion</title>
+        <item>
+            <title>1.0</title>
+            <pubDate>Sun, 19 Jul 2026 01:44:51 +0300</pubDate>
+            <link>https://mesutcydev.github.io/AgentDeck/</link>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Mesutcydev/AgentDeck/releases/latest/download/AgentDeck-Companion.dmg" length="5746273" type="application/octet-stream" sparkle:edSignature="cUp7qNQl7K1SFQaZCjckRRi/ZSqXWbXpE+Kzfs2az/8kvt1dhlQuR76Zww1XpLrpGne0+lT0OwYjmaueLuuSCQ=="/>
+        </item>
+    </channel>
+</rss>

@@ -14,7 +14,10 @@ struct HomeView: View {
     @Bindable var state: IOSAppState
     @State private var isPresentingNewSession = false
     @State private var isPresentingNewShell = false
+    @State private var launchingAgentID: AgentIdentifier?
+    @State private var duplicateProviderID: AgentIdentifier?
     @State private var path: [SessionID] = []
+    @AppStorage("home.agentOrder") private var persistedAgentOrder = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -57,6 +60,20 @@ struct HomeView: View {
                     }
                 }
             }
+            .confirmationDialog(
+                duplicateProviderName.map { "\($0) is already running" } ?? "Agent already running",
+                isPresented: Binding(
+                    get: { duplicateProviderID != nil },
+                    set: { if !$0 { duplicateProviderID = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Resume Current Session") { resumeDuplicateProvider() }
+                Button("Start Another Session") { startDuplicateProvider() }
+                Button("Cancel", role: .cancel) { duplicateProviderID = nil }
+            } message: {
+                Text("Continue the live conversation or deliberately create a separate one.")
+            }
             .navigationDestination(for: SessionID.self) { sessionID in
                 if let session = state.sessions.first(where: { $0.id == sessionID }) {
                     SessionView(
@@ -91,6 +108,8 @@ struct HomeView: View {
                 .font(DeckFont.display)
                 .tracking(-1.4)
             }
+            HostSwitcherButton(state: state)
+                .frame(maxWidth: .infinity, alignment: .leading)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: DeckSpace.s) {
                     connectionStatus
@@ -128,11 +147,10 @@ struct HomeView: View {
             Circle()
                 .fill(isConnected ? DeckColor.success : Color(.tertiaryLabel))
                 .frame(width: 8, height: 8)
-            Text(state.remoteConnectionStatus)
-                .font(DeckFont.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            DeckMarqueeText(text: state.remoteConnectionStatus)
+                .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -184,14 +202,53 @@ struct HomeView: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
             } else {
                 VStack(spacing: 0) {
-                    ForEach(state.agentCards) { card in
-                        AgentCardCell(card: card)
-                            .transition(DeckMotion.appearance(reduceMotion: reduceMotion))
+                    ForEach(orderedAgentCards) { card in
+                        Button {
+                            launch(card)
+                        } label: {
+                            AgentCardCell(
+                                card: card,
+                                isLaunching: launchingAgentID == card.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(
+                            !isConnected || !card.isObservedInstalled ||
+                            launchingAgentID != nil || state.projects.isEmpty
+                        )
+                        .draggable(card.id.rawValue)
+                        .dropDestination(for: String.self) { items, _ in
+                            guard let draggedID = items.first else { return false }
+                            reorderAgent(draggedID, before: card.id.rawValue)
+                            return true
+                        }
+                        .transition(DeckMotion.appearance(reduceMotion: reduceMotion))
                     }
                 }
-                .animation(DeckMotion.standard, value: state.agentCards)
+                .animation(DeckMotion.standard, value: orderedAgentCards.map(\.id))
             }
         }
+    }
+
+    private var orderedAgentCards: [IOSAppState.AgentCard] {
+        let preferred = persistedAgentOrder.split(separator: "|").map(String.init)
+        let ranks = Dictionary(uniqueKeysWithValues: preferred.enumerated().map { ($0.element, $0.offset) })
+        return state.agentCards.sorted { lhs, rhs in
+            let left = ranks[lhs.id.rawValue] ?? Int.max
+            let right = ranks[rhs.id.rawValue] ?? Int.max
+            return left == right ? lhs.displayName < rhs.displayName : left < right
+        }
+    }
+
+    private func reorderAgent(_ draggedID: String, before targetID: String) {
+        guard draggedID != targetID else { return }
+        var ids = orderedAgentCards.map { $0.id.rawValue }
+        guard let source = ids.firstIndex(of: draggedID),
+              let target = ids.firstIndex(of: targetID) else { return }
+        let moved = ids.remove(at: source)
+        ids.insert(moved, at: source < target ? target - 1 : target)
+        persistedAgentOrder = ids.joined(separator: "|")
+        DeckHaptics.light()
     }
 
     // MARK: - Active sessions (§7.2)
@@ -213,6 +270,33 @@ struct HomeView: View {
                             ActiveSessionRow(session: session, projectName: projectName(for: session))
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                DeckHaptics.warning()
+                                Task { await state.deleteSession(session) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            Button {
+                                DeckHaptics.warning()
+                                Task { await state.interruptSession(sessionID: session.id) }
+                            } label: {
+                                Label("Stop", systemImage: "stop.fill")
+                            }
+                            .tint(.orange)
+                        }
+                        .contextMenu {
+                            Button {
+                                Task { await state.interruptSession(sessionID: session.id) }
+                            } label: {
+                                Label("Stop Session", systemImage: "stop.fill")
+                            }
+                            Button(role: .destructive) {
+                                Task { await state.deleteSession(session) }
+                            } label: {
+                                Label("Delete Session", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -261,12 +345,131 @@ struct HomeView: View {
         await state.refreshProjects()
         await state.refreshApprovalState()
     }
+
+    /// Provider cards are launch controls, not decoration. A tap starts the
+    /// discovered CLI in the first authorized project and opens its live PTY.
+    private func launch(_ card: IOSAppState.AgentCard) {
+        guard card.isObservedInstalled, let project = state.projects.first else { return }
+        if state.activeSessions.contains(where: { $0.agent == card.id }) {
+            duplicateProviderID = card.id
+            DeckHaptics.light()
+            return
+        }
+        launchNew(card, project: project)
+    }
+
+    private var duplicateProviderName: String? {
+        guard let id = duplicateProviderID else { return nil }
+        return state.agentCards.first(where: { $0.id == id })?.displayName
+    }
+
+    private func resumeDuplicateProvider() {
+        guard let id = duplicateProviderID,
+              let session = state.activeSessions.first(where: { $0.agent == id }) else {
+            duplicateProviderID = nil
+            return
+        }
+        duplicateProviderID = nil
+        path = [session.id]
+    }
+
+    private func startDuplicateProvider() {
+        guard let id = duplicateProviderID,
+              let card = state.agentCards.first(where: { $0.id == id }),
+              let project = state.projects.first else {
+            duplicateProviderID = nil
+            return
+        }
+        duplicateProviderID = nil
+        launchNew(card, project: project)
+    }
+
+    private func launchNew(_ card: IOSAppState.AgentCard, project: ProjectRecord) {
+        launchingAgentID = card.id
+        DeckHaptics.send()
+        Task {
+            let sessionID = await state.startTerminal(projectID: project.id, agentID: card.id)
+            launchingAgentID = nil
+            if let sessionID { path = [sessionID] }
+        }
+    }
+}
+
+// MARK: - Active host switcher
+
+private struct HostSwitcherButton: View {
+    @Bindable var state: IOSAppState
+
+    var body: some View {
+        Menu {
+            if state.pairedDevices.isEmpty {
+                Text("No paired Macs")
+            } else {
+                ForEach(state.pairedDevices.filter { !$0.revoked }, id: \.id) { device in
+                    Button {
+                        Task { await state.selectHost(device.id) }
+                    } label: {
+                        Label {
+                            Text(device.displayName)
+                        } icon: {
+                            Image(systemName: device.id == state.activeHostID ? "checkmark.circle.fill" : "desktopcomputer")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(DeckColor.ink)
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(DeckColor.canvas)
+                }
+                .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(state.activeHost?.displayName ?? "SELECT MAC")
+                        .font(DeckFont.monoSmall.weight(.semibold))
+                        .foregroundStyle(DeckColor.ink)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(activeIsConnected ? DeckColor.success : Color(.tertiaryLabel))
+                            .frame(width: 5, height: 5)
+                        Text(activeIsConnected ? "LIVE" : "OFFLINE")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.leading, 5)
+            .padding(.trailing, 8)
+            .padding(.vertical, 5)
+            .background(DeckColor.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                    .stroke(DeckColor.rule, lineWidth: 0.75)
+            }
+        }
+        .accessibilityLabel("Active Mac, \(state.activeHost?.displayName ?? "none selected")")
+        .accessibilityHint("Switch the Mac used for new agent sessions")
+    }
+
+    private var activeIsConnected: Bool {
+        guard let id = state.activeHostID else { return false }
+        return state.connectedDeviceIDs.contains(id)
+    }
 }
 
 // MARK: - Agent card cell (§7.2: 96 pt, radius 14, padding 12)
 
 private struct AgentCardCell: View {
     let card: IOSAppState.AgentCard
+    let isLaunching: Bool
 
     private var theme: AgentTheme {
         AgentThemes.theme(for: card.id)
@@ -282,15 +485,33 @@ private struct AgentCardCell: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer()
-            Text(statusLine)
-                .font(DeckFont.monoSmall)
-                .foregroundStyle(card.activeSessionCount > 0 ? theme.accent : Color.secondary)
-                .lineLimit(1)
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+            if isLaunching {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(theme.accent)
+            } else {
+                HStack(spacing: DeckSpace.xs) {
+                    Text(statusLine)
+                        .font(DeckFont.monoSmall)
+                        .foregroundStyle(card.activeSessionCount > 0 ? theme.accent : Color.secondary)
+                        .lineLimit(1)
+                    if card.isObservedInstalled {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(theme.accent)
+                    }
+                }
+            }
         }
         .padding(.vertical, DeckSpace.s)
         .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(card.displayName), \(statusLine)")
+        .accessibilityHint(card.isObservedInstalled ? "Starts this provider in your default project" : "Provider is not installed on the paired Mac")
     }
 
     private var statusLine: String {

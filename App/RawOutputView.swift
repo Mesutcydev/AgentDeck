@@ -9,15 +9,18 @@ import SwiftUI
 
 struct RawOutputView: View {
     let text: String
+    let theme: AgentTheme
 
     var body: some View {
         ScrollView {
             Text(text.isEmpty ? "No raw output yet." : text)
                 .font(.system(.body, design: .monospaced))
+                .foregroundStyle(theme.terminalText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
                 .textSelection(.enabled)
         }
-        .background(Color(uiColor: .systemBackground))
+        .scrollContentBackground(.hidden)
+        .background(theme.terminalBackground)
     }
 }

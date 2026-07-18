@@ -50,53 +50,91 @@ struct ContentView: View {
 
                 Section {
                     if state.pairedDevices.isEmpty {
-                        Text("00 / NO ENDPOINTS")
-                            .font(DeckFont.monoSmall.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                        DeckEmptyLedger(
+                            index: "00",
+                            title: "No endpoints",
+                            detail: "Pair a trusted Mac to open the local agent channel.",
+                            systemImage: "desktopcomputer",
+                            accent: DeckColor.ink
+                        )
                     } else {
                         ForEach(state.pairedDevices, id: \.id) { device in
-                            DeviceRow(device: device) {
-                                devicePendingRevoke = device
+                            DeviceRow(
+                                device: device,
+                                isActive: device.id == state.activeHostID,
+                                isConnected: state.connectedDeviceIDs.contains(device.id),
+                                select: { Task { await state.selectHost(device.id) } },
+                                requestRevoke: { devicePendingRevoke = device }
+                            )
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button("Revoke", systemImage: "xmark.shield", role: .destructive) {
+                                    devicePendingRevoke = device
+                                }
                             }
                         }
                     }
                 } header: {
                     DeckSectionLabel(title: "Paired Macs", eyebrow: "Remote endpoints", systemImage: "desktopcomputer")
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 Section {
-                    if QRScanParser.isCameraScanningAvailable {
-                        Button {
-                            isShowingScanner = true
-                        } label: {
-                            Label("Scan QR Code", systemImage: "qrcode.viewfinder")
-                                .font(DeckFont.callout.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
+                    VStack(spacing: 0) {
+                        if QRScanParser.isCameraScanningAvailable {
+                            Button {
+                                isShowingScanner = true
+                            } label: {
+                                Label("SCAN PAIRING CODE", systemImage: "qrcode.viewfinder")
+                                    .font(DeckFont.monoSmall.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 52)
+                            }
+                            .buttonStyle(DeckActionButtonStyle(primary: true))
                         }
-                        .buttonStyle(DeckActionButtonStyle(primary: true))
-                        .listRowInsets(EdgeInsets())
-                    }
-                    TextField("Paste QR payload", text: $qrText, axis: .vertical)
-                        .font(DeckFont.monoSmall)
-                        .lineLimit(3...6)
-                    Button {
-                        Task { await startPairing(with: qrText) }
-                    } label: {
-                        if isPairing {
-                            ProgressView()
+                        VStack(alignment: .leading, spacing: DeckSpace.s) {
+                            HStack {
+                                Text("MANUAL / PAYLOAD")
+                                Spacer()
+                                Text(qrText.isEmpty ? "EMPTY" : "READY")
+                                    .foregroundStyle(qrText.isEmpty ? DeckColor.ink.opacity(0.36) : DeckColor.success)
+                            }
+                            .font(.caption2.monospaced().weight(.semibold))
+                            TextField("Paste encrypted QR payload", text: $qrText, axis: .vertical)
+                                .font(DeckFont.monoSmall)
+                                .textFieldStyle(.plain)
+                                .lineLimit(3...6)
+                                .padding(DeckSpace.s)
+                                .background(DeckColor.canvas)
+                                .overlay(alignment: .leading) { Rectangle().fill(DeckColor.accent).frame(width: 2) }
+                            Button {
+                                Task { await startPairing(with: qrText) }
+                            } label: {
+                                HStack {
+                                    Text(isPairing ? "OPENING SECURE CHANNEL" : "PAIR ENDPOINT")
+                                    Spacer()
+                                    if isPairing { ProgressView().controlSize(.small) }
+                                    else { Image(systemName: "arrow.right") }
+                                }
+                                .font(DeckFont.monoSmall.weight(.semibold))
+                                .padding(.horizontal, DeckSpace.m)
                                 .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Pair")
-                                .font(DeckFont.callout.weight(.semibold))
-                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                            }
+                            .buttonStyle(DeckActionButtonStyle(primary: true))
+                            .disabled(qrText.isEmpty || isPairing || state.identity == nil)
                         }
+                        .padding(DeckSpace.m)
+                        .background(DeckColor.surfaceRaised)
+                        .overlay(alignment: .leading) { Rectangle().fill(DeckColor.accent).frame(width: 3) }
                     }
-                    .buttonStyle(DeckActionButtonStyle())
-                    .disabled(qrText.isEmpty || isPairing || state.identity == nil)
                 } header: {
                     DeckSectionLabel(title: "Pair a Mac", eyebrow: "Add endpoint", systemImage: "qrcode")
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 if let error = state.error(for: .pairing) {
                     Section {
@@ -173,6 +211,9 @@ struct ContentView: View {
 
 private struct DeviceRow: View {
     let device: DeviceRecord
+    let isActive: Bool
+    let isConnected: Bool
+    let select: () -> Void
     let requestRevoke: () -> Void
 
     var body: some View {
@@ -195,14 +236,27 @@ private struct DeviceRow: View {
                     .font(DeckFont.footnote.weight(.medium))
                     .foregroundStyle(DeckColor.danger)
             } else {
-                Button("Revoke", role: .destructive) {
-                    requestRevoke()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Button(isActive ? "ACTIVE" : "USE MAC") { select() }
+                        .font(DeckFont.monoSmall.weight(.semibold))
+                        .foregroundStyle(isActive ? DeckColor.success : DeckColor.accent)
+                    HStack(spacing: 4) {
+                        Circle().fill(isConnected ? DeckColor.success : Color(.tertiaryLabel)).frame(width: 5, height: 5)
+                        Text(isConnected ? "CONNECTED" : "OFFLINE")
+                    }
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
                 }
-                .font(DeckFont.footnote)
             }
         }
         .padding(.vertical, DeckSpace.xxs)
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            if !device.revoked && !isActive {
+                Button("Use This Mac", systemImage: "arrow.triangle.swap") { select() }
+            }
+            Button("Revoke", systemImage: "xmark.shield", role: .destructive) { requestRevoke() }
+        }
     }
 }
 

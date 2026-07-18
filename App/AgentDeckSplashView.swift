@@ -74,7 +74,7 @@ private struct AnimatedTerminalMark: View {
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
-            let line = size * 0.082
+            let line = size * 0.076
             ZStack {
                 Circle().fill(signal)
                     .frame(width: size * 0.035, height: size * 0.035)
@@ -86,7 +86,7 @@ private struct AnimatedTerminalMark: View {
                     .shadow(color: ink.opacity(phase >= .frame ? 0.10 : 0), radius: 8, y: 5)
                 PromptChevronShape().trim(from: 0, to: phase >= .prompt ? 1 : 0)
                     .stroke(ink, style: .init(lineWidth: line * 0.72, lineCap: .round, lineJoin: .round))
-                Capsule().fill(ink).frame(width: size * 0.23, height: line * 0.72)
+                Capsule().fill(ink).frame(width: size * 0.20, height: line * 0.72)
                     .offset(x: size * 0.105, y: size * 0.13)
                     .scaleEffect(x: phase >= .prompt ? 1 : 0, anchor: .leading)
                 segments(size: size, line: line)
@@ -100,23 +100,27 @@ private struct AnimatedTerminalMark: View {
     private func segments(size: CGFloat, line: CGFloat) -> some View {
         let width = line * 0.82
         return Group {
-            Capsule().fill(signal).frame(width: width, height: size * 0.17)
-                .offset(x: size * 0.39, y: -size * 0.23).reveal(phase >= .orangeOne)
-            Capsule().fill(signal).frame(width: width, height: size * 0.17)
-                .offset(x: size * 0.39, y: size * 0.01).reveal(phase >= .orangeTwo)
-            Capsule().fill(signal).frame(width: size * 0.17, height: width)
-                .offset(x: size * 0.16, y: size * 0.39).reveal(phase >= .orangeThree)
-            BottomRightCornerShape()
+            Capsule().fill(signal).frame(width: width, height: size * 0.13)
+                .offset(x: size * 0.34, y: -size * 0.23).reveal(phase >= .orangeOne)
+            Capsule().fill(signal).frame(width: width, height: size * 0.13)
+                .offset(x: size * 0.34, y: size * 0.01).reveal(phase >= .orangeTwo)
+            BottomRightRailShape()
+                .trim(from: 0, to: bottomRailProgress)
                 .stroke(signal, style: .init(lineWidth: width, lineCap: .round, lineJoin: .round))
-                .frame(width: size * 0.23, height: size * 0.23)
-                .offset(x: size * 0.31, y: size * 0.31).reveal(phase >= .orangeFour)
+                .reveal(phase >= .orangeThree)
         }
+    }
+
+    private var bottomRailProgress: CGFloat {
+        if phase >= .orangeFour { return 1 }
+        if phase >= .orangeThree { return 0.34 }
+        return 0
     }
 }
 
 private extension View {
     func reveal(_ visible: Bool) -> some View {
-        opacity(visible ? 1 : 0).scaleEffect(visible ? 1 : 0.35).blur(radius: visible ? 0 : 5)
+        opacity(visible ? 1 : 0).blur(radius: visible ? 0 : 3)
     }
 }
 
@@ -127,7 +131,7 @@ private enum SplashPhase: Int, Comparable {
 
 private struct TerminalFrameShape: Shape {
     func path(in rect: CGRect) -> Path {
-        let minX = rect.minX + rect.width * 0.17, maxX = rect.maxX - rect.width * 0.12
+        let minX = rect.minX + rect.width * 0.17, maxX = rect.maxX - rect.width * 0.22
         let minY = rect.minY + rect.height * 0.17, maxY = rect.maxY - rect.height * 0.18
         let radius = rect.width * 0.10
         var path = Path()
@@ -147,11 +151,18 @@ private struct PromptChevronShape: Shape {
     }
 }
 
-private struct BottomRightCornerShape: Shape {
+/// One continuous rail owns the entire orange bottom/right junction. Keeping
+/// it in one path prevents separate rounded stroke caps from ever colliding.
+private struct BottomRightRailShape: Shape {
     func path(in rect: CGRect) -> Path {
-        var path = Path(); path.move(to: .init(x: rect.minX, y: rect.maxY))
-        path.addLine(to: .init(x: rect.maxX * 0.52, y: rect.maxY))
-        path.addQuadCurve(to: .init(x: rect.maxX, y: rect.maxY * 0.52), control: .init(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: .init(x: rect.maxX, y: rect.minY)); return path
+        var path = Path()
+        path.move(to: .init(x: rect.width * 0.61, y: rect.height * 0.86))
+        path.addLine(to: .init(x: rect.width * 0.75, y: rect.height * 0.86))
+        path.addQuadCurve(
+            to: .init(x: rect.width * 0.84, y: rect.height * 0.77),
+            control: .init(x: rect.width * 0.84, y: rect.height * 0.86)
+        )
+        path.addLine(to: .init(x: rect.width * 0.84, y: rect.height * 0.68))
+        return path
     }
 }

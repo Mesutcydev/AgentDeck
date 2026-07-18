@@ -15,6 +15,7 @@ struct AgentDeckApp: App {
     @State private var pushManager: PushNotificationManager?
     @State private var didRequestPushAuthorization = false
     @State private var showsSplash = true
+    @AppStorage("iosOnboardingAcceptedV1") private var onboardingAccepted = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -27,6 +28,11 @@ struct AgentDeckApp: App {
                     }
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
                     .zIndex(10)
+                }
+                if !showsSplash && !onboardingAccepted {
+                    IOSOnboardingView { onboardingAccepted = true }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .zIndex(9)
                 }
             }
                 .task {

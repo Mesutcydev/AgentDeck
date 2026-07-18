@@ -89,9 +89,18 @@ enum SessionCursorStore {
 /// §13.1 device identity stored in the iOS Keychain via `KeychainIdentityStore`.
 @MainActor @Observable
 final class IOSAppState {
+    struct DebugEntry: Identifiable, Equatable {
+        let id = UUID()
+        let timestamp: Date
+        let category: String
+        let message: String
+    }
+
     private(set) var identity: DeviceIdentity?
     private(set) var privateKey: Curve25519.Signing.PrivateKey?
     private(set) var pairedDevices: [DeviceRecord] = []
+    private(set) var connectedDeviceIDs: Set<DeviceID> = []
+    private(set) var activeHostID: DeviceID?
     private(set) var sessions: [SessionRecord] = []
     private(set) var projects: [ProjectRecord] = []
     private(set) var pendingApprovalRecords: [ApprovalRecord] = []
@@ -101,6 +110,11 @@ final class IOSAppState {
     private(set) var remoteConnectionStatus: String = "Disconnected"
     private(set) var connectionCircuitOpen = false
     private(set) var isStoreDegraded = false
+    private(set) var debugEntries: [DebugEntry] = []
+    let subscription = SubscriptionManager()
+    var paywallPresented = false
+    private(set) var freeLaunchCount = UserDefaults.standard.integer(forKey: "freeAgentLaunchCount")
+    static let freeLaunchLimit = 3
     /// Bumped whenever mirrored session/event state changes; views reload.
     private(set) var eventRevision = 0
     private(set) var pendingPairingConfirmation: PairingConfirmationRequest?
@@ -135,6 +149,8 @@ final class IOSAppState {
     private let syncedAgentStore = SyncedAgentStore()
     private let attachmentCoordinator: AttachmentTransferCoordinator
     private var terminalModels: [SessionID: TerminalSessionModel] = [:]
+    private var activeProjectIDs: Set<ProjectID> = []
+    private static let activeHostDefaultsKey = "activeHostDeviceID"
 
     init(
         repository: any SessionRepository,
@@ -149,6 +165,9 @@ final class IOSAppState {
         self.stateSyncMirror = StateSyncMirror(repository: repository)
         self.attachmentCoordinator = AttachmentTransferCoordinator(sender: remoteConnections)
         self.syncedAgents = syncedAgentStore.load()
+        if let saved = UserDefaults.standard.string(forKey: Self.activeHostDefaultsKey) {
+            self.activeHostID = DeviceID(saved)
+        }
     }
 
     // MARK: - Errors (typed per domain)
@@ -159,10 +178,23 @@ final class IOSAppState {
 
     func setError(_ message: String?, domain: AppErrorDomain) {
         errors[domain] = message
+        if let message { recordDebug(domain.rawValue, "ERROR · \(message)") }
     }
 
     func clearErrors() {
         errors.removeAll()
+    }
+
+    func recordDebug(_ category: String, _ message: String) {
+        debugEntries.append(DebugEntry(timestamp: Date(), category: category.uppercased(), message: message))
+        if debugEntries.count > 250 {
+            debugEntries.removeFirst(debugEntries.count - 250)
+        }
+    }
+
+    func clearDebugEntries() {
+        debugEntries.removeAll(keepingCapacity: true)
+        recordDebug("debug", "Log cleared")
     }
 
     // MARK: - Tabs / deep links
@@ -221,6 +253,7 @@ final class IOSAppState {
     // MARK: - Connection lifecycle
 
     func startRemoteConnections() async {
+        await subscription.start()
         await remoteConnections.setChangeHandler { [weak self] in
             await self?.refreshFromRemoteConnection()
         }
@@ -260,6 +293,7 @@ final class IOSAppState {
             privateKey: privateKey,
             displayName: "iPhone"
         )
+        await remoteConnections.setActiveDeviceID(activeHostID)
         await refreshFromRemoteConnection()
     }
 
@@ -302,9 +336,12 @@ final class IOSAppState {
 
     private func refreshFromRemoteConnection() async {
         let status = await remoteConnections.currentStatus()
+        connectedDeviceIDs = status.connectedDeviceIDs
         connectionCircuitOpen = status.circuitOpen
         if !status.connectedDeviceIDs.isEmpty {
-            remoteConnectionStatus = "Connected (\(status.connectedDeviceIDs.count) Mac\(status.connectedDeviceIDs.count == 1 ? "" : "s"))"
+            let transport = activeHostTransportLabel
+            remoteConnectionStatus = "\(transport) · \(status.connectedDeviceIDs.count) Mac\(status.connectedDeviceIDs.count == 1 ? "" : "s")"
+            recordDebug("connection", remoteConnectionStatus)
             setError(nil, domain: .connection)
         } else if status.circuitOpen {
             remoteConnectionStatus = "Connection paused — reconnect manually"
@@ -354,6 +391,14 @@ final class IOSAppState {
     func refreshDevices() async {
         do {
             pairedDevices = try await repository.listDevices()
+            let available = pairedDevices.filter { !$0.revoked }
+            if activeHostID == nil || !available.contains(where: { $0.id == activeHostID }) {
+                activeHostID = available.first?.id
+                if let activeHostID {
+                    UserDefaults.standard.set(activeHostID.wireString, forKey: Self.activeHostDefaultsKey)
+                    await remoteConnections.setActiveDeviceID(activeHostID)
+                }
+            }
             setError(nil, domain: .pairing)
             publishWidgetSummary()
         } catch {
@@ -372,10 +417,38 @@ final class IOSAppState {
 
     func refreshProjects() async {
         do {
-            projects = try await repository.listProjects()
+            let allProjects = try await repository.listProjects()
+            projects = activeProjectIDs.isEmpty ? allProjects : allProjects.filter { activeProjectIDs.contains($0.id) }
         } catch {
             setError("Project list failed: \(error.localizedDescription)", domain: .session)
         }
+    }
+
+    var activeHost: DeviceRecord? {
+        pairedDevices.first(where: { $0.id == activeHostID })
+    }
+
+    /// A user-readable transport state. Tailscale IPv4 lives in
+    /// 100.64.0.0/10; everything else is a direct local endpoint.
+    var activeHostTransportLabel: String {
+        guard let host = activeHost?.peerEndpoint?.host else { return "Connected" }
+        let pieces = host.split(separator: ".").compactMap { Int($0) }
+        if pieces.count == 4, pieces[0] == 100, (64...127).contains(pieces[1]) {
+            return "Tailnet"
+        }
+        if host.hasSuffix(".ts.net") { return "Tailnet" }
+        return "Local"
+    }
+
+    func selectHost(_ deviceID: DeviceID) async {
+        guard pairedDevices.contains(where: { $0.id == deviceID && !$0.revoked }) else { return }
+        activeHostID = deviceID
+        UserDefaults.standard.set(deviceID.wireString, forKey: Self.activeHostDefaultsKey)
+        syncedAgents = []
+        activeProjectIDs = []
+        await remoteConnections.setActiveDeviceID(deviceID)
+        recordDebug("connection", "Active host · \(activeHost?.displayName ?? deviceID.wireString)")
+        DeckHaptics.light()
     }
 
     func refreshApprovalState() async {
@@ -435,6 +508,7 @@ final class IOSAppState {
         case .projectList(let payload):
             do {
                 let synced = try StateSyncWire.decodeProjects(payload)
+                activeProjectIDs = Set(synced.map(\.id))
                 try await stateSyncMirror.mirrorProjects(synced)
                 var gitStates: [ProjectID: String] = [:]
                 for project in synced {
@@ -583,7 +657,13 @@ final class IOSAppState {
     /// Starts a login-shell PTY in an authorized project and waits for the
     /// companion's `terminal.started` answer (10 s ceiling). Returns nil
     /// with a visible error on failure — callers navigate only on success.
-    func startTerminal(projectID: ProjectID, cols: Int = 120, rows: Int = 32) async -> SessionID? {
+    func startTerminal(
+        projectID: ProjectID,
+        agentID: AgentIdentifier? = nil,
+        cols: Int = 120,
+        rows: Int = 32
+    ) async -> SessionID? {
+        guard authorizeNewLaunch() else { return nil }
         guard terminalStartContinuations[projectID] == nil else {
             setError("A shell is already starting for this project.", domain: .session)
             return nil
@@ -595,7 +675,12 @@ final class IOSAppState {
                 Task { [weak self] in
                     guard let self else { return }
                     do {
-                        try await remoteConnections.sendTerminalStart(projectID: projectID, cols: cols, rows: rows)
+                        try await remoteConnections.sendTerminalStart(
+                            projectID: projectID,
+                            agentID: agentID,
+                            cols: cols,
+                            rows: rows
+                        )
                     } catch {
                         failTerminalStart(projectID: projectID, error: error)
                     }
@@ -609,6 +694,7 @@ final class IOSAppState {
                 }
             }
             setError(nil, domain: .session)
+            recordSuccessfulLaunch()
             return response.sessionID
         } catch {
             setError("Shell start failed: \(error.localizedDescription)", domain: .session)
@@ -624,15 +710,19 @@ final class IOSAppState {
     /// Sessions list and any waiting `startTerminal` caller resumes.
     private func applyTerminalStarted(_ response: TerminalStartedResponse) async {
         projectShellSessions[response.projectID] = response.sessionID
+        recordDebug(
+            "terminal",
+            "Started \(response.agentID?.rawValue ?? "shell") · session \(response.sessionID.wireString.prefix(8))"
+        )
         if let continuation = terminalStartContinuations.removeValue(forKey: response.projectID) {
             continuation.resume(returning: response)
         }
-        guard let shellAgent = Self.shellAgentID else { return }
+        guard let sessionAgent = response.agentID ?? Self.shellAgentID else { return }
         if (try? await repository.session(id: response.sessionID)) == nil {
             let now = Date.unixMillisecondsNow
             let record = SessionRecord(
                 id: response.sessionID,
-                agent: shellAgent,
+                agent: sessionAgent,
                 projectID: response.projectID,
                 state: .ready,
                 createdAt: now,
@@ -694,7 +784,16 @@ final class IOSAppState {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            try await remoteConnections.sendPrompt(sessionID: sessionID, text: trimmed)
+            if projectShellSessions.values.contains(sessionID) {
+                recordDebug("terminal", "Sending \(trimmed.utf8.count) bytes · session \(sessionID.wireString.prefix(8))")
+                try await remoteConnections.sendTerminalInput(
+                    sessionID: sessionID,
+                    data: Data((trimmed + "\r").utf8)
+                )
+            } else {
+                recordDebug("session", "Sending structured prompt · session \(sessionID.wireString.prefix(8))")
+                try await remoteConnections.sendPrompt(sessionID: sessionID, text: trimmed)
+            }
             setError(nil, domain: .session)
         } catch {
             setError("Prompt not sent: \(error.localizedDescription)", domain: .session)
@@ -708,6 +807,7 @@ final class IOSAppState {
             setError("A prompt is required to start a session.", domain: .session)
             return
         }
+        guard authorizeNewLaunch() else { return }
         do {
             try await remoteConnections.sendSessionStart(
                 projectID: projectID,
@@ -716,11 +816,32 @@ final class IOSAppState {
                 model: model?.isEmpty == false ? model : nil
             )
             setError(nil, domain: .session)
+            recordSuccessfulLaunch()
         } catch IOSRemoteConnectionError.unsupportedFrame(let name) {
             setError("This build cannot send \(name) yet — the companion contract is still landing.", domain: .session)
         } catch {
             setError("Session start failed: \(error.localizedDescription)", domain: .session)
         }
+    }
+
+    var freeLaunchesRemaining: Int {
+        max(0, Self.freeLaunchLimit - freeLaunchCount)
+    }
+
+    @discardableResult
+    func authorizeNewLaunch() -> Bool {
+        guard subscription.isEntitled || freeLaunchCount < Self.freeLaunchLimit else {
+            paywallPresented = true
+            DeckHaptics.warning()
+            return false
+        }
+        return true
+    }
+
+    private func recordSuccessfulLaunch() {
+        guard !subscription.isEntitled else { return }
+        freeLaunchCount += 1
+        UserDefaults.standard.set(freeLaunchCount, forKey: "freeAgentLaunchCount")
     }
 
     /// Interrupts a running session (`session.interrupt`).
@@ -730,6 +851,24 @@ final class IOSAppState {
             setError(nil, domain: .session)
         } catch {
             setError("Interrupt failed: \(error.localizedDescription)", domain: .session)
+        }
+    }
+
+    /// Removes retained session memory from this device. Live PTYs are
+    /// interrupted first so Delete never leaves an invisible process behind.
+    func deleteSession(_ session: SessionRecord) async {
+        if !session.state.isTerminal {
+            await interruptSession(sessionID: session.id)
+        }
+        do {
+            _ = try await repository.deleteSession(id: session.id)
+            terminalModels[session.id] = nil
+            projectShellSessions = projectShellSessions.filter { $0.value != session.id }
+            recordDebug("session", "Deleted session \(session.id.wireString.prefix(8))")
+            await refreshSessions()
+            setError(nil, domain: .session)
+        } catch {
+            setError("Session could not be deleted: \(error.localizedDescription)", domain: .session)
         }
     }
 

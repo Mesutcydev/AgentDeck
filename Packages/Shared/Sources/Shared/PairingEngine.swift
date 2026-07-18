@@ -316,7 +316,11 @@ public actor PairingServerEngine {
                     type: .pairingComplete,
                     payload: PairingComplete(
                         protocolVersion: PairingQRPayload.version,
-                        grantedCapabilities: PairingServerEngine.grantedCapabilities
+                        grantedCapabilities: PairingServerEngine.grantedCapabilities,
+                        reconnectEndpoint: PeerEndpoint(
+                            host: configuration.advertisedHost,
+                            port: boundPort ?? configuration.listenPort
+                        )
                     ).toJSONValue()
                 )
                 liveConnections[existing.id] = connection
@@ -431,7 +435,11 @@ public actor PairingServerEngine {
                 type: .pairingComplete,
                 payload: PairingComplete(
                     protocolVersion: PairingQRPayload.version,
-                    grantedCapabilities: PairingServerEngine.grantedCapabilities
+                    grantedCapabilities: PairingServerEngine.grantedCapabilities,
+                    reconnectEndpoint: PeerEndpoint(
+                        host: configuration.advertisedHost,
+                        port: boundPort ?? configuration.listenPort
+                    )
                 ).toJSONValue()
             )
             // Full success clears the source's failure state (§13.4).
@@ -520,7 +528,11 @@ public actor PairingServerEngine {
                     let newSessionID = try await handler(request)
                     try await connection.send(
                         type: .terminalStarted,
-                        payload: TerminalStartedResponse(sessionID: newSessionID, projectID: request.projectID).toJSONValue()
+                        payload: TerminalStartedResponse(
+                            sessionID: newSessionID,
+                            projectID: request.projectID,
+                            agentID: request.agentID
+                        ).toJSONValue()
                     )
                 case .terminalInput:
                     let input = try TerminalStreamBridge.parseInput(frame.frame.payload)
@@ -858,7 +870,7 @@ public actor PairingClientEngine {
                 capabilities: complete.grantedCapabilities,
                 pairedAt: configuration.nowProvider(),
                 lastSeenAt: configuration.nowProvider(),
-                lastKnownEndpoint: qrPayload.endpoint.description
+                lastKnownEndpoint: (complete.reconnectEndpoint ?? qrPayload.endpoint).description
             )
             if try await repository.device(id: peer.id) != nil {
                 // Re-pair: refresh the record.
@@ -910,6 +922,11 @@ public actor PairingClientEngine {
             guard let serverKey = peer.publicKey.flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
                   verifyFrameSignature(reply, with: serverKey) else {
                 throw PairingError.signatureInvalid
+            }
+            let complete = try PairingComplete(jsonValue: reply.frame.payload)
+            if let endpoint = complete.reconnectEndpoint,
+               endpoint != peer.peerEndpoint {
+                try await repository.updateDeviceEndpoint(peer.id, endpoint: endpoint.description)
             }
             return connection
         case .pairingReject:

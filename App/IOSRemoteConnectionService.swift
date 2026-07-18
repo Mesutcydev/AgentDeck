@@ -32,6 +32,9 @@ actor IOSRemoteConnectionService {
     private let repository: any SessionRepository
     private let mirror: SessionEventMirror
     private var connections: [DeviceID: PeerConnection] = [:]
+    private var activeDeviceID: DeviceID?
+    private var sessionOwners: [SessionID: DeviceID] = [:]
+    private static let sessionOwnersDefaultsKey = "sessionHostOwners"
     private var readTasks: [DeviceID: Task<Void, Never>] = [:]
     private var status = Status()
     private var changeHandler: (@Sendable () async -> Void)?
@@ -49,6 +52,12 @@ actor IOSRemoteConnectionService {
     init(repository: any SessionRepository) {
         self.repository = repository
         self.mirror = SessionEventMirror(repository: repository)
+        if let stored = UserDefaults.standard.dictionary(forKey: Self.sessionOwnersDefaultsKey) as? [String: String] {
+            self.sessionOwners = Dictionary(uniqueKeysWithValues: stored.compactMap { session, device in
+                guard let sessionID = SessionID(session), let deviceID = DeviceID(device) else { return nil }
+                return (sessionID, deviceID)
+            })
+        }
     }
 
     func setChangeHandler(_ handler: (@Sendable () async -> Void)?) {
@@ -91,6 +100,13 @@ actor IOSRemoteConnectionService {
         status
     }
 
+    func setActiveDeviceID(_ deviceID: DeviceID?) async {
+        activeDeviceID = deviceID
+        guard let deviceID, let connection = connections[deviceID] else { return }
+        await requestStateSync(over: connection)
+        await notifyChange()
+    }
+
     func adopt(
         connection: PeerConnection,
         deviceID: DeviceID,
@@ -103,7 +119,7 @@ actor IOSRemoteConnectionService {
         readTasks[deviceID] = Task {
             await self.serve(connection: connection, deviceID: deviceID, configuration: configuration)
         }
-        await resumeSessions(over: connection)
+        await resumeSessions(over: connection, deviceID: deviceID)
         await requestStateSync(over: connection)
         await notifyChange()
     }
@@ -248,7 +264,7 @@ actor IOSRemoteConnectionService {
             decision: decision,
             usedSecureConfirmation: usedSecureConfirmation
         )
-        try await send(type: .approvalResolve, payload: request.toJSONValue())
+        try await send(type: .approvalResolve, payload: request.toJSONValue(), sessionID: sessionID)
     }
 
     /// §29 Phase 6 client prompt to an active session (`session.prompt`).
@@ -257,25 +273,25 @@ actor IOSRemoteConnectionService {
             sessionID: sessionID,
             prompt: PromptInput(text: text)
         )
-        try await send(type: .sessionPrompt, payload: request.toJSONValue())
+        try await send(type: .sessionPrompt, payload: request.toJSONValue(), sessionID: sessionID)
     }
 
     /// Interrupt a running session (`session.interrupt`).
     func sendInterrupt(sessionID: SessionID) async throws {
         let request = SessionInterruptRequest(sessionID: sessionID)
-        try await send(type: .sessionInterrupt, payload: request.toJSONValue())
+        try await send(type: .sessionInterrupt, payload: request.toJSONValue(), sessionID: sessionID)
     }
 
     /// PTY keystrokes/paste for a session (`terminal.input`, base64 data).
     func sendTerminalInput(sessionID: SessionID, data: Data) async throws {
         let payload = TerminalInputPayload(sessionID: sessionID, data: data)
-        try await send(type: .terminalInput, payload: payload.toJSONValue())
+        try await send(type: .terminalInput, payload: payload.toJSONValue(), sessionID: sessionID)
     }
 
     /// §29: launch a login-shell PTY inside an authorized project
     /// (`terminal.start`); the companion answers with `terminal.started`.
-    func sendTerminalStart(projectID: ProjectID, cols: Int, rows: Int) async throws {
-        let request = TerminalStartRequest(projectID: projectID, cols: cols, rows: rows)
+    func sendTerminalStart(projectID: ProjectID, agentID: AgentIdentifier? = nil, cols: Int, rows: Int) async throws {
+        let request = TerminalStartRequest(projectID: projectID, agentID: agentID, cols: cols, rows: rows)
         try await send(type: .terminalStart, payload: request.toJSONValue())
     }
 
@@ -283,13 +299,13 @@ actor IOSRemoteConnectionService {
     /// replays its scrollback as isReplay `terminal.output` chunks.
     func sendTerminalAttach(sessionID: SessionID) async throws {
         let request = TerminalAttachRequest(sessionID: sessionID)
-        try await send(type: .terminalAttach, payload: request.toJSONValue())
+        try await send(type: .terminalAttach, payload: request.toJSONValue(), sessionID: sessionID)
     }
 
     /// PTY window resize (`terminal.resize`, TIOCSWINSZ on the Mac).
     func sendTerminalResize(sessionID: SessionID, cols: Int, rows: Int) async throws {
         let request = TerminalResizeRequest(sessionID: sessionID, cols: cols, rows: rows)
-        try await send(type: .terminalResize, payload: request.toJSONValue())
+        try await send(type: .terminalResize, payload: request.toJSONValue(), sessionID: sessionID)
     }
 
     /// Starts a session in an authorized project (`session.start`,
@@ -328,7 +344,7 @@ actor IOSRemoteConnectionService {
         if let maxBytes {
             pairs.append(("maxBytes", .int(maxBytes)))
         }
-        try await send(type: frameType, payload: .object(pairs))
+        try await send(type: frameType, payload: .object(pairs), sessionID: sessionID)
     }
 
     /// `attachment.init` — opens a transfer for one composer attachment.
@@ -378,8 +394,11 @@ actor IOSRemoteConnectionService {
         ]))
     }
 
-    private func send(type: FrameType, payload: JSONValue) async throws {
-        guard let connection = connections.values.first else {
+    private func send(type: FrameType, payload: JSONValue, sessionID: SessionID? = nil) async throws {
+        let targetID = sessionID.flatMap { sessionOwners[$0] } ?? activeDeviceID
+        let connection = targetID.flatMap { connections[$0] }
+            ?? connections.sorted(by: { $0.key.wireString < $1.key.wireString }).first?.value
+        guard let connection else {
             throw IOSRemoteConnectionError.notConnected
         }
         try await connection.send(type: type, payload: payload)
@@ -410,11 +429,13 @@ actor IOSRemoteConnectionService {
                 switch frame.frame.type {
                 case .sessionEvent:
                     let event = try AgentEvent(jsonValue: frame.frame.payload)
+                    assignOwner(deviceID, to: event.sessionID)
                     try await mirror.mirror(event)
                     try await repository.updateDeviceLastSeen(deviceID, at: Date.unixMillisecondsNow)
                     await notifyChange()
                 case .terminalOutput:
                     let output = try TerminalOutputPayload(jsonValue: frame.frame.payload)
+                    assignOwner(deviceID, to: output.sessionID)
                     terminalOutputHandler?(output.sessionID, output.data, output.isReplay)
                 case .heartbeat:
                     continue
@@ -424,18 +445,22 @@ actor IOSRemoteConnectionService {
                     // Shared cases keep flowing here.
                     switch frame.frame.type.rawValue {
                     case "project.list.response":
+                        guard deviceID == activeDeviceID else { continue }
                         stateSyncHandler?(.projectList(frame.frame.payload))
                         await notifyChange()
                     case "agent.list.response":
+                        guard deviceID == activeDeviceID else { continue }
                         stateSyncHandler?(.agentList(frame.frame.payload))
                         await notifyChange()
                     case "agent.snapshot":
+                        guard deviceID == activeDeviceID else { continue }
                         stateSyncHandler?(.agentSnapshot(frame.frame.payload))
                         await notifyChange()
                     case "diff.content":
                         diffContentHandler?(frame.frame.payload)
                     case "terminal.started":
                         if let response = try? TerminalStartedResponse(jsonValue: frame.frame.payload) {
+                            assignOwner(deviceID, to: response.sessionID)
                             terminalStartedHandler?(response)
                         }
                     case "attachment.init.response":
@@ -473,10 +498,11 @@ actor IOSRemoteConnectionService {
         }
     }
 
-    private func resumeSessions(over connection: PeerConnection) async {
+    private func resumeSessions(over connection: PeerConnection, deviceID: DeviceID) async {
         do {
             let sessions = try await repository.listSessions()
             for session in sessions where !session.state.isTerminal {
+                if let owner = sessionOwners[session.id], owner != deviceID { continue }
                 // Highest persisted sequence: resume replays only what the
                 // local store lacks; the mirror dedupes by event ID anyway.
                 let storedLatest = try await repository.events(
@@ -512,6 +538,15 @@ actor IOSRemoteConnectionService {
         if let changeHandler {
             await changeHandler()
         }
+    }
+
+    private func assignOwner(_ deviceID: DeviceID, to sessionID: SessionID) {
+        guard sessionOwners[sessionID] != deviceID else { return }
+        sessionOwners[sessionID] = deviceID
+        let encoded = Dictionary(uniqueKeysWithValues: sessionOwners.map {
+            ($0.key.wireString, $0.value.wireString)
+        })
+        UserDefaults.standard.set(encoded, forKey: Self.sessionOwnersDefaultsKey)
     }
 }
 

@@ -188,6 +188,47 @@ struct DeckActionButtonStyle: ButtonStyle {
     }
 }
 
+/// A ledger-like empty state that stays inside the precision-console visual
+/// language instead of falling back to a plain white List row.
+struct DeckEmptyLedger: View {
+    let index: String
+    let title: String
+    let detail: String
+    let systemImage: String
+    var accent: Color = DeckColor.accent
+
+    var body: some View {
+        HStack(spacing: DeckSpace.m) {
+            VStack(spacing: 3) {
+                Text(index)
+                    .font(.caption2.monospaced().weight(.bold))
+                Rectangle().fill(accent).frame(width: 18, height: 2)
+            }
+            .foregroundStyle(accent)
+            .frame(width: 28)
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(DeckColor.ink.opacity(0.62))
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title.uppercased())
+                    .font(DeckFont.monoSmall.weight(.semibold))
+                    .foregroundStyle(DeckColor.ink)
+                Text(detail)
+                    .font(DeckFont.footnote)
+                    .foregroundStyle(DeckColor.ink.opacity(0.5))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DeckSpace.m)
+        .frame(minHeight: 72)
+        .background(DeckColor.surfaceRaised)
+        .overlay(alignment: .leading) { Rectangle().fill(accent).frame(width: 3) }
+        .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 1) }
+        .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 1) }
+    }
+}
+
 struct DeckSectionLabel: View {
     let title: String
     var eyebrow: String? = nil

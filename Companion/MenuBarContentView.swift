@@ -115,9 +115,8 @@ struct MenuBarContentView: View {
             HStack(spacing: 14) {
                 Button("SETTINGS") { openSettings() }
                 Button("DIAGNOSTICS") { Task { await DiagnosticsExporter.export(from: state) } }
-                if state.sparkleController.isConfigured {
-                    Button("UPDATES") { state.sparkleController.checkForUpdates() }
-                }
+                Button("CHECK FOR UPDATES") { state.sparkleController.checkForUpdates() }
+                    .disabled(!state.sparkleController.isConfigured)
                 Spacer()
                 Button("QUIT") { NSApplication.shared.terminate(nil) }
                     .foregroundStyle(CompanionDeckColor.danger)
