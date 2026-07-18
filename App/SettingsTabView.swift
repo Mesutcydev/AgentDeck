@@ -82,13 +82,16 @@ struct SettingsTabView: View {
                     SettingsLedgerRow(label: "PRODUCT", value: ProductNaming.name)
                     SettingsLedgerRow(
                         label: "PLAN",
-                        value: state.subscription.isEntitled ? "Pro" : "Free · \(state.freeLaunchesRemaining) launches left"
+                        value: BuildChannel.isDebugUnlocked
+                            ? "Unlocked · \(BuildChannel.label)"
+                            : (state.subscription.isEntitled ? "Pro" : "Free · \(state.freeLaunchesRemaining) launches left")
                     )
                     Button("RESTORE PURCHASES") { Task { await state.subscription.restore() } }
                         .font(DeckFont.monoSmall.weight(.semibold))
                         .frame(height: 40)
                 }
 
+                if BuildChannel.isDebugUnlocked {
                     SettingsLedgerSection(title: "DEBUGGER") {
                         NavigationLink {
                             DebugConsoleView(state: state)
@@ -108,6 +111,8 @@ struct SettingsTabView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    }
+                }
                 }
                 .padding(.horizontal, DeckSpace.m)
                 .padding(.bottom, DeckSpace.xl)

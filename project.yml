@@ -10,6 +10,11 @@ options:
   groupSortPosition: top
   generateEmptyDirectories: false
 
+configs:
+  Debug: debug
+  Release: release
+  TestFlight: release
+
 # Project-default Swift language mode; targets inherit it.
 settings:
   base:
@@ -112,6 +117,9 @@ targets:
       configs:
         Release:
           APS_ENVIRONMENT: production
+        TestFlight:
+          APS_ENVIRONMENT: production
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TESTFLIGHT_INTERNAL"
     dependencies:
       - package: Shared
       - package: SwiftTerm
@@ -156,3 +164,15 @@ schemes:
     build:
       targets:
         App: all
+  App-TestFlight:
+    build:
+      targets:
+        App: all
+    run:
+      config: TestFlight
+    profile:
+      config: TestFlight
+    analyze:
+      config: TestFlight
+    archive:
+      config: TestFlight
