@@ -825,11 +825,13 @@ final class IOSAppState {
     }
 
     var freeLaunchesRemaining: Int {
-        max(0, Self.freeLaunchLimit - freeLaunchCount)
+        if BuildChannel.isDebugUnlocked { return .max }
+        return max(0, Self.freeLaunchLimit - freeLaunchCount)
     }
 
     @discardableResult
     func authorizeNewLaunch() -> Bool {
+        guard !BuildChannel.isDebugUnlocked else { return true }
         guard subscription.isEntitled || freeLaunchCount < Self.freeLaunchLimit else {
             paywallPresented = true
             DeckHaptics.warning()
@@ -839,7 +841,7 @@ final class IOSAppState {
     }
 
     private func recordSuccessfulLaunch() {
-        guard !subscription.isEntitled else { return }
+        guard !BuildChannel.isDebugUnlocked, !subscription.isEntitled else { return }
         freeLaunchCount += 1
         UserDefaults.standard.set(freeLaunchCount, forKey: "freeAgentLaunchCount")
     }
