@@ -4,73 +4,122 @@ import Shared
 struct OnboardingView: View {
     let state: AppState
     @Environment(\.dismissWindow) private var dismissWindow
+    @State private var page = 0
+    @State private var accepted = false
+    @State private var revealed = false
+
+    private let pages: [(String, String, String, String)] = [
+        ("01", "The Mac is the boundary", "Your real CLI agents execute here. AgentDeck exposes a controlled, authenticated view—never a cloud copy.", "desktopcomputer"),
+        ("02", "Choose the workspace", "Authorize only folders you intend agents to access. Every remote launch inherits that exact project boundary.", "folder.badge.gearshape"),
+        ("03", "Pair trusted devices", "Create a short-lived QR offer and compare the verification phrase on both screens before confirming.", "qrcode.viewfinder"),
+        ("04", "Stay accountable", "Remote agents can run commands and modify files. Keep backups and approve only actions you understand.", "checkmark.shield")
+    ]
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 22) {
+                CompanionDeckMark(size: 42)
+                    .scaleEffect(revealed ? 1 : 0.72)
+                    .opacity(revealed ? 1 : 0)
                 HStack(spacing: 0) {
-                    Text("AGENT").font(.system(size: 42, weight: .black))
-                    Text("/DECK").font(.system(size: 42, weight: .black)).foregroundStyle(CompanionDeckColor.signal)
+                    Text("AGENT").font(.system(size: 38, weight: .black))
+                    Text("/DECK").font(.system(size: 38, weight: .black)).foregroundStyle(CompanionDeckColor.signal)
                 }
-                Text("The authenticated bridge between your Mac agents and every device you trust.")
-                    .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(CompanionDeckColor.ink.opacity(0.7))
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Text("LOCAL ENGINE / REMOTE CONTROL")
+                Text("LOCAL ENGINE\nREMOTE CONTROL")
                     .font(CompanionDeckFont.label)
-                    .foregroundStyle(CompanionDeckColor.signal)
+                    .foregroundStyle(CompanionDeckColor.muted)
+                Spacer()
+                TimelineView(.animation(minimumInterval: 0.8)) { context in
+                    let live = Int(context.date.timeIntervalSinceReferenceDate) % 2 == 0
+                    HStack(spacing: 8) {
+                        Circle().fill(CompanionDeckColor.success).frame(width: 7, height: 7)
+                            .opacity(live ? 1 : 0.35)
+                        Text("SECURE CHANNEL READY").font(CompanionDeckFont.label)
+                    }
+                }
             }
             .padding(36)
-            .frame(width: 310)
+            .frame(width: 286)
             .frame(maxHeight: .infinity, alignment: .leading)
             .background(CompanionDeckColor.surface)
             .overlay(alignment: .trailing) { Rectangle().fill(CompanionDeckColor.rule).frame(width: 1) }
 
-            VStack(alignment: .leading, spacing: 24) {
-                CompanionPageHeader(
-                    index: "00 / START",
-                    title: "Your agents stay here.",
-                    detail: "AgentDeck streams their real sessions to your phone while this Mac remains the secure execution boundary."
-                )
-                onboardingRow("01", "Menu bar control", "Connection state, approvals, and recent session memory stay one click away.", "menubar.rectangle")
-                onboardingRow("02", "Durable memory", "Session metadata and redacted event history are stored locally in SQLite.", "clock.arrow.circlepath")
-                onboardingRow("03", "Explicit trust", "Every new device is paired with a short-lived QR offer and human verification.", "lock.shield")
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    Text("SETUP / \(page + 1) OF \(pages.count)").font(CompanionDeckFont.label).foregroundStyle(CompanionDeckColor.signal)
+                    Spacer()
+                    Text("GUIDE AVAILABLE IN SETTINGS").font(CompanionDeckFont.label).foregroundStyle(CompanionDeckColor.muted)
+                }
+                onboardingCard
+                    .id(page)
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+                HStack(spacing: 5) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        Capsule().fill(index == page ? CompanionDeckColor.signal : CompanionDeckColor.rule)
+                            .frame(width: index == page ? 34 : 8, height: 5)
+                            .animation(.spring(response: 0.32, dampingFraction: 0.76), value: page)
+                    }
+                }
+                if page == pages.count - 1 {
+                    Button { accepted.toggle() } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: accepted ? "checkmark.square.fill" : "square").foregroundStyle(accepted ? CompanionDeckColor.success : CompanionDeckColor.ink)
+                            Text("I understand that I am responsible for commands, approvals, credentials, backups, authorized access, and compliance with agent-provider terms.")
+                                .font(CompanionDeckFont.body).multilineTextAlignment(.leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
                 Spacer()
                 HStack {
-                    Text("NO CLOUD EXECUTION · NO SILENT APPROVALS")
-                        .font(CompanionDeckFont.label)
-                        .foregroundStyle(CompanionDeckColor.muted)
+                    if page > 0 {
+                        Button("BACK") { withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { page -= 1 } }
+                            .buttonStyle(CompanionActionStyle())
+                    }
                     Spacer()
                     Button {
-                        Task {
-                            await state.completeOnboarding()
-                            dismissWindow(id: "onboarding")
+                        if page < pages.count - 1 {
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { page += 1 }
+                        } else {
+                            Task {
+                                await state.completeOnboarding()
+                                dismissWindow(id: "onboarding")
+                            }
                         }
                     } label: {
-                        HStack { Text("ENTER AGENTDECK"); Image(systemName: "arrow.right") }
+                        HStack { Text(page == pages.count - 1 ? "ACCEPT & START" : "CONTINUE"); Image(systemName: "arrow.right") }
                     }
                     .buttonStyle(CompanionActionStyle(primary: true, tint: CompanionDeckColor.signal))
+                    .disabled(page == pages.count - 1 && !accepted)
                     .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(36)
         }
-        .frame(width: 780, height: 500)
+        .frame(width: 820, height: 540)
         .background(CompanionDeckColor.canvas)
         .preferredColorScheme(.light)
+        .onAppear { withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) { revealed = true } }
     }
 
-    private func onboardingRow(_ index: String, _ title: String, _ detail: String, _ symbol: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text(index).font(CompanionDeckFont.label).foregroundStyle(CompanionDeckColor.signal).frame(width: 24)
-            Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).frame(width: 24)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 14, weight: .semibold))
-                Text(detail).font(CompanionDeckFont.body).foregroundStyle(CompanionDeckColor.muted)
+    private var onboardingCard: some View {
+        let item = pages[page]
+        return HStack(alignment: .top, spacing: 22) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16).fill(CompanionDeckColor.ink).frame(width: 92, height: 92)
+                Image(systemName: item.3).font(.system(size: 32, weight: .semibold)).foregroundStyle(CompanionDeckColor.signal)
+                    .symbolEffect(.breathe, options: .repeating)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Text(item.0 + " / CONTROL PLANE").font(CompanionDeckFont.label).foregroundStyle(CompanionDeckColor.signal)
+                Text(item.1).font(.system(size: 28, weight: .black))
+                Text(item.2).font(.system(size: 15)).foregroundStyle(CompanionDeckColor.muted).fixedSize(horizontal: false, vertical: true)
+                if page == 2 {
+                    Label("After setup, open Settings → User Guide for the full visual walkthrough.", systemImage: "book.pages")
+                        .font(CompanionDeckFont.body.weight(.semibold)).padding(10).background(CompanionDeckColor.surface)
+                }
             }
         }
-        .padding(.bottom, 14)
-        .overlay(alignment: .bottom) { Rectangle().fill(CompanionDeckColor.rule).frame(height: 1) }
+        .padding(.vertical, 16)
     }
 }

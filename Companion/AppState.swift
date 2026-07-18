@@ -260,6 +260,13 @@ final class AppState {
     // MARK: - Status refresh (menu counts, §12.6)
 
     func refreshStatus() async {
+        let detectedTailscaleStatus = ConnectionServiceDetector.tailscaleStatus()
+        if detectedTailscaleStatus != tailscaleStatus {
+            Log.logger(.transport).info(
+                "Tailscale status: \(detectedTailscaleStatus.rawValue, privacy: .public)"
+            )
+        }
+        tailscaleStatus = detectedTailscaleStatus
         guard let repository else { return }
         do {
             async let active = repository.countActiveSessions()

@@ -22,11 +22,15 @@ public struct TerminalStartRequest: Sendable, Equatable {
     public static let payloadV: Int64 = StateSyncPayloadVersion.v1.rawValue
 
     public var projectID: ProjectID
+    /// When present, launch this discovered provider CLI directly in the
+    /// project PTY. Nil preserves the plain login-shell behavior.
+    public var agentID: AgentIdentifier?
     public var cols: Int
     public var rows: Int
 
-    public init(projectID: ProjectID, cols: Int = 80, rows: Int = 24) {
+    public init(projectID: ProjectID, agentID: AgentIdentifier? = nil, cols: Int = 80, rows: Int = 24) {
         self.projectID = projectID
+        self.agentID = agentID
         self.cols = cols
         self.rows = rows
     }
@@ -39,17 +43,27 @@ extension TerminalStartRequest: JSONValueConvertible {
             throw JSONValueDecodingError.unsupportedPayloadVersion(found: version, supported: Self.payloadV)
         }
         self.projectID = try jsonValue.nestedField("projectID", as: ProjectID.self)
+        if let rawAgentID = try jsonValue.optionalStringField("agentID") {
+            guard let agentID = AgentIdentifier(rawAgentID) else {
+                throw JSONValueDecodingError.invalidValue(field: "agentID", reason: "invalid")
+            }
+            self.agentID = agentID
+        } else {
+            self.agentID = nil
+        }
         self.cols = Int(try jsonValue.optionalIntField("cols") ?? 80)
         self.rows = Int(try jsonValue.optionalIntField("rows") ?? 24)
     }
 
     public func toJSONValue() -> JSONValue {
-        .object([
+        var pairs: [(String, JSONValue)] = [
             ("payloadV", .int(Self.payloadV)),
             ("projectID", projectID.toJSONValue()),
             ("cols", .int(Int64(cols))),
             ("rows", .int(Int64(rows)))
-        ])
+        ]
+        if let agentID { pairs.append(("agentID", .string(agentID.rawValue))) }
+        return .object(pairs)
     }
 }
 
@@ -59,10 +73,12 @@ public struct TerminalStartedResponse: Sendable, Equatable {
 
     public var sessionID: SessionID
     public var projectID: ProjectID
+    public var agentID: AgentIdentifier?
 
-    public init(sessionID: SessionID, projectID: ProjectID) {
+    public init(sessionID: SessionID, projectID: ProjectID, agentID: AgentIdentifier? = nil) {
         self.sessionID = sessionID
         self.projectID = projectID
+        self.agentID = agentID
     }
 }
 
@@ -77,14 +93,24 @@ extension TerminalStartedResponse: JSONValueConvertible {
         }
         self.sessionID = sessionID
         self.projectID = try jsonValue.nestedField("projectID", as: ProjectID.self)
+        if let rawAgentID = try jsonValue.optionalStringField("agentID") {
+            guard let agentID = AgentIdentifier(rawAgentID) else {
+                throw JSONValueDecodingError.invalidValue(field: "agentID", reason: "invalid")
+            }
+            self.agentID = agentID
+        } else {
+            self.agentID = nil
+        }
     }
 
     public func toJSONValue() -> JSONValue {
-        .object([
+        var pairs: [(String, JSONValue)] = [
             ("payloadV", .int(Self.payloadV)),
             ("sessionID", .string(sessionID.wireString)),
             ("projectID", projectID.toJSONValue())
-        ])
+        ]
+        if let agentID { pairs.append(("agentID", .string(agentID.rawValue))) }
+        return .object(pairs)
     }
 }
 

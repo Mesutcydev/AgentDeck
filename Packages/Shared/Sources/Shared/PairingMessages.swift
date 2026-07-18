@@ -134,10 +134,18 @@ public struct PairingComplete: Sendable, Equatable {
     /// The negotiated protocol version (§13.2 version negotiation).
     public let protocolVersion: Int64
     public let grantedCapabilities: [PeerCapability]
+    /// Signed server-preferred reconnect endpoint. Optional for wire
+    /// compatibility with earlier companions.
+    public let reconnectEndpoint: PeerEndpoint?
 
-    public init(protocolVersion: Int64, grantedCapabilities: [PeerCapability]) {
+    public init(
+        protocolVersion: Int64,
+        grantedCapabilities: [PeerCapability],
+        reconnectEndpoint: PeerEndpoint? = nil
+    ) {
         self.protocolVersion = protocolVersion
         self.grantedCapabilities = grantedCapabilities
+        self.reconnectEndpoint = reconnectEndpoint
     }
 }
 
@@ -255,16 +263,21 @@ extension PairingComplete: JSONValueConvertible {
         try requirePayloadV(jsonValue, supported: PairingComplete.payloadV)
         self.init(
             protocolVersion: try jsonValue.intField("protocolVersion"),
-            grantedCapabilities: try jsonValue.nestedArrayField("grantedCapabilities", as: PeerCapability.self)
+            grantedCapabilities: try jsonValue.nestedArrayField("grantedCapabilities", as: PeerCapability.self),
+            reconnectEndpoint: try jsonValue.optionalStringField("reconnectEndpoint").flatMap(PeerEndpoint.init)
         )
     }
 
     public func toJSONValue() -> JSONValue {
-        .object([
+        var pairs: [(String, JSONValue)] = [
             ("payloadV", .int(PairingComplete.payloadV)),
             ("protocolVersion", .int(protocolVersion)),
             ("grantedCapabilities", .array(grantedCapabilities.map { $0.toJSONValue() }))
-        ])
+        ]
+        if let reconnectEndpoint {
+            pairs.append(("reconnectEndpoint", .string(reconnectEndpoint.description)))
+        }
+        return .object(pairs)
     }
 }
 

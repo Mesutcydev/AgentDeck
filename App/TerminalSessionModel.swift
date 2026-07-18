@@ -35,6 +35,10 @@ final class TerminalSessionModel {
     /// Reattachment replays scrollback via `terminal.attach` (isReplay
     /// chunks), so this flag only distinguishes "never attached" from live.
     private(set) var hasReceivedOutput = false
+    /// Last valid geometry reported by SwiftTerm. Retained so reconnecting or
+    /// attaching a PTY immediately restores a usable host window size.
+    private(set) var terminalColumns = 80
+    private(set) var terminalRows = 24
 
     var onInput: ((Data) -> Void)?
     /// Fired when SwiftTerm reports a size change; wired to `terminal.resize`.
@@ -90,9 +94,20 @@ final class TerminalSessionModel {
     nonisolated func resize(cols: Int, rows: Int) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            self.terminalView?.resize(cols: cols, rows: rows)
-            self.onResize?(cols, rows)
+            // SwiftTerm has already resized itself before invoking its
+            // delegate. Calling TerminalView.resize here feeds straight back
+            // into sizeChanged and can recurse until the app terminates.
+            let safeColumns = max(20, cols)
+            let safeRows = max(4, rows)
+            guard safeColumns != self.terminalColumns || safeRows != self.terminalRows else { return }
+            self.terminalColumns = safeColumns
+            self.terminalRows = safeRows
+            self.onResize?(safeColumns, safeRows)
         }
+    }
+
+    func resendCurrentSize() {
+        onResize?(terminalColumns, terminalRows)
     }
 
     // MARK: - Internals

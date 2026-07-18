@@ -65,7 +65,7 @@ final class CompanionSessionService {
                 tlsIdentity: tls,
                 displayName: Host.current().localizedName ?? ProductNaming.name,
                 listenPort: PeerEndpoint.defaultPort,
-                advertisedHost: LocalNetworkAdvertisedHost.current()
+                advertisedHost: LocalNetworkAdvertisedHost.remoteAccessCurrent()
             )
             config.notificationDispatch = { [relayCoordinator] event in
                 await relayCoordinator.dispatch(event: event)
@@ -112,6 +112,12 @@ final class CompanionSessionService {
         let repository = repository
         let ptySupervisor = ptySupervisor
         let sequencer = terminalSequencer
+        let launchablePairs: [(AgentIdentifier, String)] = discoveredAgents.compactMap { agent in
+            guard case .installed = agent.installation.state,
+                  let path = agent.installation.executablePath else { return nil }
+            return (agent.id, path)
+        }
+        let launchableAgents: [AgentIdentifier: String] = Dictionary(uniqueKeysWithValues: launchablePairs)
 
         config.terminalStartHandler = { request in
             // §16 containment: the working directory comes from the
@@ -123,10 +129,23 @@ final class CompanionSessionService {
                 throw PairingError.protocolViolation("terminal stream unavailable")
             }
             let sessionID = SessionID.random()
+            let executable: String
+            let arguments: [String]
+            if let requestedAgent = request.agentID {
+                guard let providerExecutable = launchableAgents[requestedAgent] else {
+                    throw PairingError.protocolViolation("requested agent is not installed")
+                }
+                try ExecutableIntegrityRegistry.shared.verify(executableAtPath: providerExecutable)
+                executable = providerExecutable
+                arguments = []
+            } else {
+                executable = "/bin/zsh"
+                arguments = ["-l"]
+            }
             let launch = PTYLaunchRequest(
                 sessionID: sessionID,
-                executable: "/bin/zsh",
-                arguments: ["-l"],
+                executable: executable,
+                arguments: arguments,
                 workingDirectory: project.canonicalPath,
                 cols: request.cols,
                 rows: request.rows

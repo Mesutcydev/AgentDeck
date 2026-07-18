@@ -64,6 +64,13 @@ struct MainTabView: View {
                 state.respondToPairingConfirmation(confirmed: confirmed)
             }
         }
+        .fullScreenCover(isPresented: $state.paywallPresented) {
+            PaywallView(
+                manager: state.subscription,
+                launchesUsed: state.freeLaunchCount,
+                dismiss: { state.paywallPresented = false }
+            )
+        }
         .onOpenURL { url in
             if let link = IOSAppState.parseDeepLink(url) {
                 state.handleDeepLink(link)
@@ -197,9 +204,12 @@ private struct ApprovalInboxView: View {
 
                 Section {
                     if state.pendingApprovalRecords.isEmpty {
-                        Text("No approvals waiting.")
-                            .font(DeckFont.callout)
-                            .foregroundStyle(.secondary)
+                        DeckEmptyLedger(
+                            index: "00",
+                            title: "Queue clear",
+                            detail: "No agent action is waiting for your decision.",
+                            systemImage: "checkmark.shield"
+                        )
                     } else {
                         ForEach(state.pendingApprovalRecords, id: \.request.id) { record in
                             VStack(alignment: .leading, spacing: DeckSpace.xxs) {
@@ -224,12 +234,19 @@ private struct ApprovalInboxView: View {
                 } header: {
                     DeckSectionLabel(title: "Pending", eyebrow: "Needs a decision", systemImage: "checkmark.shield")
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 Section {
                     if state.approvalRules.isEmpty {
-                        Text("No saved approval rules.")
-                            .font(DeckFont.callout)
-                            .foregroundStyle(.secondary)
+                        DeckEmptyLedger(
+                            index: "00",
+                            title: "No standing authority",
+                            detail: "Project-scoped permissions will be indexed here.",
+                            systemImage: "slider.horizontal.3",
+                            accent: DeckColor.ink
+                        )
                     } else {
                         ForEach(state.approvalRules, id: \.id) { rule in
                             VStack(alignment: .leading, spacing: DeckSpace.xxs) {
@@ -250,12 +267,19 @@ private struct ApprovalInboxView: View {
                 } header: {
                     DeckSectionLabel(title: "Active rules", eyebrow: "Remembered scope", systemImage: "slider.horizontal.3")
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 Section {
                     if state.approvalAuditEntries.isEmpty {
-                        Text("No approval history yet.")
-                            .font(DeckFont.callout)
-                            .foregroundStyle(.secondary)
+                        DeckEmptyLedger(
+                            index: "00",
+                            title: "Ledger ready",
+                            detail: "Every allow and deny decision will be recorded here.",
+                            systemImage: "clock.arrow.circlepath",
+                            accent: DeckColor.ink
+                        )
                     } else {
                         ForEach(state.approvalAuditEntries, id: \.id) { entry in
                             VStack(alignment: .leading, spacing: DeckSpace.xxs) {
@@ -270,6 +294,9 @@ private struct ApprovalInboxView: View {
                 } header: {
                     DeckSectionLabel(title: "Recent audit", eyebrow: "Decision trail", systemImage: "clock.arrow.circlepath")
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
             .scrollContentBackground(.hidden)
             .background { DeckCanvas() }
