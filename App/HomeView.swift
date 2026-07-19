@@ -12,10 +12,8 @@ import Shared
 
 struct HomeView: View {
     @Bindable var state: IOSAppState
-    @State private var isPresentingNewSession = false
     @State private var isPresentingNewShell = false
-    @State private var requestedAgentID: AgentIdentifier?
-    @State private var duplicateProviderID: AgentIdentifier?
+    @State private var launchingAgentID: AgentIdentifier?
     @State private var path: [SessionID] = []
     @AppStorage("home.agentOrder") private var persistedAgentOrder = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -72,31 +70,12 @@ struct HomeView: View {
             .tint(DeckColor.accent)
             .toolbarVisibility(.hidden, for: .navigationBar)
             .refreshable { await refreshAll() }
-            .sheet(isPresented: $isPresentingNewSession) {
-                NewSessionSheet(state: state, initialAgentID: requestedAgentID)
-            }
             .sheet(isPresented: $isPresentingNewShell) {
                 NewShellSheet(state: state) { sessionID in
                     isPresentingNewShell = false
                     if let sessionID {
                         path = [sessionID]
                     }
-                }
-            }
-            .sheet(
-                isPresented: Binding(
-                    get: { duplicateProviderID != nil },
-                    set: { if !$0 { duplicateProviderID = nil } }
-                )
-            ) {
-                if let id = duplicateProviderID {
-                    DuplicateProviderSheet(
-                        providerID: id,
-                        providerName: duplicateProviderName ?? "Agent",
-                        resume: resumeDuplicateProvider,
-                        startAnother: startDuplicateProvider,
-                        cancel: { duplicateProviderID = nil }
-                    )
                 }
             }
             .navigationDestination(for: SessionID.self) { sessionID in
@@ -159,13 +138,13 @@ struct HomeView: View {
                         } label: {
                             AgentCardCell(
                                 card: card,
-                                isLaunching: false
+                                isLaunching: launchingAgentID == card.id
                             )
                         }
                         .buttonStyle(.plain)
                         .disabled(
                             !isConnected || !card.isObservedInstalled ||
-                            state.projects.isEmpty
+                            state.projects.isEmpty || launchingAgentID != nil
                         )
                         .draggable(card.id.rawValue)
                         .dropDestination(for: String.self) { items, _ in
@@ -263,31 +242,25 @@ struct HomeView: View {
 
     private var quickActions: some View {
         HStack(spacing: DeckSpace.s) {
-            Button {
-                requestedAgentID = nil
-                isPresentingNewSession = true
-            } label: {
-                Label("Start Agent", systemImage: "sparkles")
+            HStack(spacing: DeckSpace.s) {
+                Image(systemName: "hand.tap.fill")
+                    .foregroundStyle(DeckColor.accent)
+                Text("Tap a provider to start it instantly")
                     .font(DeckFont.callout.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                    .foregroundStyle(.primary)
             }
-            .buttonStyle(DeckActionButtonStyle(primary: true))
-            .disabled(!isConnected)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 isPresentingNewShell = true
             } label: {
                 Label("New Shell", systemImage: "terminal")
                     .font(DeckFont.callout.weight(.semibold))
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, DeckSpace.m)
                     .frame(height: 56)
             }
             .buttonStyle(DeckActionButtonStyle())
             .disabled(!isConnected)
-        }
-        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: isPresentingNewSession) { _, new in
-            new
         }
     }
 
@@ -298,48 +271,27 @@ struct HomeView: View {
         await state.refreshApprovalState()
     }
 
-    /// Provider cards open the structured-session composer. Raw PTY launch is
-    /// kept behind the explicit New Shell action.
+    /// A provider row is the launch button: it opens that provider's real CLI
+    /// in the current authorized project without an intermediate composer.
     private func launch(_ card: IOSAppState.AgentCard) {
-        guard card.isObservedInstalled, !state.projects.isEmpty else { return }
-        if state.activeSessions.contains(where: { $0.agent == card.id }) {
-            duplicateProviderID = card.id
+        guard card.isObservedInstalled,
+              launchingAgentID == nil,
+              let project = state.projects.first else { return }
+        if let running = state.activeSessions.first(where: { $0.agent == card.id }) {
+            path = [running.id]
             DeckHaptics.light()
             return
         }
-        presentStructuredLaunch(card)
-    }
-
-    private var duplicateProviderName: String? {
-        guard let id = duplicateProviderID else { return nil }
-        return state.agentCards.first(where: { $0.id == id })?.displayName
-    }
-
-    private func resumeDuplicateProvider() {
-        guard let id = duplicateProviderID,
-              let session = state.activeSessions.first(where: { $0.agent == id }) else {
-            duplicateProviderID = nil
-            return
-        }
-        duplicateProviderID = nil
-        path = [session.id]
-    }
-
-    private func startDuplicateProvider() {
-        guard let id = duplicateProviderID,
-              let card = state.agentCards.first(where: { $0.id == id }),
-              !state.projects.isEmpty else {
-            duplicateProviderID = nil
-            return
-        }
-        duplicateProviderID = nil
-        presentStructuredLaunch(card)
-    }
-
-    private func presentStructuredLaunch(_ card: IOSAppState.AgentCard) {
-        requestedAgentID = card.id
+        launchingAgentID = card.id
         DeckHaptics.send()
-        isPresentingNewSession = true
+        Task {
+            let sessionID = await state.startTerminal(
+                projectID: project.id,
+                agentID: card.id
+            )
+            launchingAgentID = nil
+            if let sessionID { path = [sessionID] }
+        }
     }
 }
 

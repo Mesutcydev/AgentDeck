@@ -52,7 +52,8 @@ struct PairingIntegrationTests {
     private func makeServer(
         repository: SQLiteSessionStore,
         maxPairedClients: Int = 3,
-        confirmationDelegate: (any PairingConfirmationDelegate)? = nil
+        confirmationDelegate: (any PairingConfirmationDelegate)? = nil,
+        terminalStartHandler: (@Sendable (TerminalStartRequest) async throws -> SessionID)? = nil
     ) async throws -> (engine: PairingServerEngine, identity: DeviceIdentity, privateKey: Curve25519.Signing.PrivateKey, tls: TLSIdentity) {
         let privateKey = Curve25519.Signing.PrivateKey()
         let identity = DeviceIdentity(deviceID: .random(), publicKey: privateKey.publicKey)
@@ -68,6 +69,7 @@ struct PairingIntegrationTests {
         config.maxPairedClients = maxPairedClients
         config.handshakeTimeoutMilliseconds = 5_000
         config.confirmationTimeoutMilliseconds = 5_000
+        config.terminalStartHandler = terminalStartHandler
         let engine = PairingServerEngine(
             configuration: config,
             repository: repository,
@@ -330,6 +332,63 @@ struct PairingIntegrationTests {
     }
 
     // MARK: - Session resume
+
+    @Test("provider tap launches the exact CLI and returns a navigable session")
+    func providerTerminalStart() async throws {
+        try await runIntegrationTest {
+            let project = ProjectRecord(
+                id: .random(),
+                displayName: "AgentDeck",
+                canonicalPath: "/tmp/AgentDeck",
+                createdAt: Date.unixMillisecondsNow
+            )
+            let grok = try #require(AgentIdentifier("com.xai.grok"))
+            let launchedSession = SessionID.random()
+            let receivedRequest = Mutex<TerminalStartRequest?>(nil)
+            let serverRepo = try SQLiteSessionStore.inMemory()
+            try await serverRepo.insertProject(project)
+            let server = try await makeServer(
+                repository: serverRepo,
+                terminalStartHandler: { request in
+                    receivedRequest.withLock { $0 = request }
+                    return launchedSession
+                }
+            )
+            let clientRepo = try SQLiteSessionStore.inMemory()
+            let client = try await makeClient(repository: clientRepo)
+            let offer = await server.engine.makeOffer()
+            let (outcome, optionalConnection) = try await client.engine.pair(qrPayload: offer.payload)
+            guard case .paired = outcome, let connection = optionalConnection else {
+                Issue.record("pairing failed before provider launch: \(outcome)")
+                return
+            }
+
+            let request = TerminalStartRequest(
+                projectID: project.id,
+                agentID: grok,
+                cols: 120,
+                rows: 32
+            )
+            try await connection.send(type: .terminalStart, payload: request.toJSONValue())
+
+            var response: TerminalStartedResponse?
+            let deadline = Date().addingTimeInterval(5)
+            while response == nil && Date() < deadline {
+                let frame = try await nextFrame(from: connection, timeout: 1_000)
+                if frame.frame.type == .terminalStarted {
+                    response = try TerminalStartedResponse(jsonValue: frame.frame.payload)
+                }
+            }
+
+            #expect(receivedRequest.withLock { $0 } == request)
+            #expect(response?.sessionID == launchedSession)
+            #expect(response?.projectID == project.id)
+            #expect(response?.agentID == grok)
+
+            await connection.close()
+            await server.engine.stop()
+        }
+    }
 
     @Test("session.resume replays events after the client's cursor")
     func sessionResumeReplay() async throws {

@@ -114,6 +114,13 @@ actor IOSRemoteConnectionService {
         await notifyChange()
     }
 
+    /// Refreshes the selected Mac's launch inventory after an authorization
+    /// or provider error so the UI cannot keep offering stale projects.
+    func refreshActiveState() async {
+        guard let activeDeviceID, let connection = connections[activeDeviceID] else { return }
+        await requestStateSync(over: connection)
+    }
+
     func adopt(
         connection: PeerConnection,
         deviceID: DeviceID,

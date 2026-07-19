@@ -296,7 +296,7 @@ final class IOSAppState {
         }
         await remoteConnections.setCommandErrorHandler { [weak self] response in
             Task { @MainActor [weak self] in
-                self?.applyRemoteCommandError(response)
+                await self?.applyRemoteCommandError(response)
             }
         }
         await remoteConnections.setAttachmentWireHandler { [weak self] response in
@@ -738,9 +738,6 @@ final class IOSAppState {
             "terminal",
             "Started \(response.agentID?.rawValue ?? "shell") · session \(response.sessionID.wireString.prefix(8))"
         )
-        if let continuation = terminalStartContinuations.removeValue(forKey: response.projectID) {
-            continuation.resume(returning: response)
-        }
         guard let sessionAgent = response.agentID ?? Self.shellAgentID else { return }
         if (try? await repository.session(id: response.sessionID)) == nil {
             let now = Date.unixMillisecondsNow
@@ -755,22 +752,31 @@ final class IOSAppState {
             try? await repository.insertSession(record)
             await refreshSessions()
         }
+        // Resume Home only after the session exists in the local mirror.
+        // NavigationDestination resolves from `sessions`; resuming earlier
+        // produced an intermittent "Session Unavailable" launch race.
+        if let continuation = terminalStartContinuations.removeValue(forKey: response.projectID) {
+            continuation.resume(returning: response)
+        }
     }
 
     /// Presents provider/session failures as recoverable command results. The
     /// secure Mac connection remains online and can immediately accept a new
     /// request.
-    private func applyRemoteCommandError(_ response: RemoteCommandError) {
+    private func applyRemoteCommandError(_ response: RemoteCommandError) async {
         let message = response.message.isEmpty
             ? "The Companion could not complete this request."
             : response.message
         recordDebug("session", "ERROR · \(response.operation): \(message)")
         if response.operation == FrameType.terminalStart.rawValue,
            let projectID = response.projectID {
+            activeProjectIDs.remove(projectID)
+            projects.removeAll { $0.id == projectID }
             failTerminalStart(
                 projectID: projectID,
                 error: RemoteCommandFailure(message: message)
             )
+            await remoteConnections.refreshActiveState()
         } else {
             setError(message, domain: .session)
         }

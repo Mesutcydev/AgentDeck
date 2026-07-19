@@ -17,6 +17,21 @@ public enum ACPClientError: Error, Equatable {
     case notRunning
 }
 
+extension ACPClientError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .processFailed(let detail):
+            "The provider CLI exited during launch: \(detail)"
+        case .protocolError(let detail):
+            "The provider returned an invalid ACP response: \(detail)"
+        case .requestTimeout(let method):
+            "The provider did not answer \(method) in time. Check the CLI on your Mac and retry."
+        case .notRunning:
+            "The provider CLI is not running. Start a new provider session."
+        }
+    }
+}
+
 /// Minimal ACP client for §11.1 adapter integration.
 public final class ACPClient: @unchecked Sendable {
     public struct Configuration: Sendable {

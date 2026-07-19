@@ -28,9 +28,7 @@ struct SessionView: View {
     @State private var events: [AgentEvent] = []
     @State private var composerText = ""
     @State private var sendCount = 0
-    @State private var isShowingSessionTools = false
     @FocusState private var composerFocused: Bool
-    @Namespace private var surfaceNamespace
 
     init(state: IOSAppState, session: SessionRecord, model: TerminalSessionModel) {
         self.state = state
@@ -50,13 +48,11 @@ struct SessionView: View {
         VStack(spacing: 0) {
             agentHeader
 
-            surfaceRail
-
             switch surface {
             case .timeline:
                 SessionTimelineView(
                     events: events,
-                    streamedOutput: "",
+                    streamedOutput: model.rawOutputText,
                     isStreaming: !session.state.isTerminal,
                     sessionState: session.state,
                     agentName: agentDisplayName,
@@ -104,6 +100,16 @@ struct SessionView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(theme.usesProviderSkin ? .dark : .light, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    composerFocused = false
+                    DeckHaptics.light()
+                }
+                .fontWeight(.semibold)
+            }
+        }
         .task(id: state.eventRevision) {
             await reloadTimeline()
         }
@@ -156,39 +162,6 @@ struct SessionView: View {
         .padding(.horizontal, DeckSpace.m)
         .frame(height: 52)
         .background(theme.workspaceBackground)
-        .overlay(alignment: .bottom) { Rectangle().fill(theme.workspaceRule).frame(height: 0.75) }
-    }
-
-    private var surfaceRail: some View {
-        HStack(spacing: 0) {
-            ForEach(SessionSurface.allCases) { option in
-                Button {
-                    DeckHaptics.light()
-                    withAnimation(DeckMotion.quick) { surface = option }
-                } label: {
-                    VStack(spacing: 7) {
-                        Text(option.rawValue.uppercased())
-                            .font(DeckFont.monoSmall.weight(surface == option ? .semibold : .regular))
-                            .foregroundStyle(surface == option ? theme.workspaceText : theme.workspaceText.opacity(0.52))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        ZStack {
-                            Rectangle().fill(Color.clear).frame(height: 2)
-                            if surface == option {
-                                Rectangle()
-                                    .fill(theme.accent)
-                                    .frame(height: 2)
-                                    .matchedGeometryEffect(id: "surface", in: surfaceNamespace)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.top, DeckSpace.s)
-        .padding(.horizontal, DeckSpace.m)
         .overlay(alignment: .bottom) { Rectangle().fill(theme.workspaceRule).frame(height: 0.75) }
     }
 
@@ -261,53 +234,13 @@ struct SessionView: View {
 
     private var composer: some View {
         VStack(spacing: 0) {
-            if isShowingSessionTools {
-                HStack(spacing: DeckSpace.xs) {
-                    sessionToolButton("Console", systemImage: "terminal.fill", destination: .terminal)
-                    sessionToolButton("Changes", systemImage: "plusminus", destination: .diffs)
-                    sessionToolButton("Output", systemImage: "text.alignleft", destination: .rawOutput)
-                }
-                .padding(.horizontal, DeckSpace.m)
-                .padding(.vertical, DeckSpace.s)
-                .background(theme.workspaceSurface)
-                .overlay(alignment: .top) { Rectangle().fill(theme.accent).frame(height: 2) }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             HStack(spacing: DeckSpace.xs) {
-                Button {
-                    withAnimation(DeckMotion.quick) { isShowingSessionTools.toggle() }
-                    DeckHaptics.light()
-                } label: {
-                    Image(systemName: isShowingSessionTools ? "xmark" : "plus")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(theme.workspaceText)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isShowingSessionTools ? "Close session tools" : "Open session tools")
-
                 TextField("Message \(agentDisplayName)…", text: $composerText, axis: .vertical)
                     .lineLimit(1...4)
                     .font(DeckFont.body)
                     .foregroundStyle(theme.workspaceText)
                     .colorScheme(theme.usesProviderSkin ? .dark : .light)
                     .focused($composerFocused)
-                if composerFocused {
-                    Button {
-                        composerFocused = false
-                        DeckHaptics.light()
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(theme.workspaceText)
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Hide Keyboard")
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                }
                 Button {
                     sendComposerMessage()
                 } label: {
@@ -330,28 +263,6 @@ struct SessionView: View {
         .animation(DeckMotion.quick, value: composerFocused)
         .disabled(session.state.isTerminal)
         .opacity(session.state.isTerminal ? 0.5 : 1)
-    }
-
-    private func sessionToolButton(
-        _ title: String,
-        systemImage: String,
-        destination: SessionSurface
-    ) -> some View {
-        Button {
-            surface = destination
-            withAnimation(DeckMotion.quick) { isShowingSessionTools = false }
-            DeckHaptics.light()
-        } label: {
-            Label(title.uppercased(), systemImage: systemImage)
-                .font(DeckFont.monoSmall.weight(.semibold))
-                .foregroundStyle(surface == destination ? theme.terminalBackground : theme.workspaceText)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(surface == destination ? theme.accent : theme.workspaceText.opacity(0.06))
-                .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(theme.workspaceRule) }
-                .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private func sendComposerMessage() {
