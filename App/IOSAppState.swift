@@ -1038,6 +1038,19 @@ final class IOSAppState {
         }
     }
 
+    /// Removes a local revocation tombstone so the device can be paired
+    /// again with a new QR code. This never restores an old credential.
+    func forget(_ device: DeviceRecord) async {
+        do {
+            await remoteConnections.stop(deviceID: device.id)
+            try await repository.deleteDevice(id: device.id)
+            setError(nil, domain: .pairing)
+            await refreshDevices()
+        } catch {
+            setError("Forget failed: \(error.localizedDescription)", domain: .pairing)
+        }
+    }
+
     // MARK: - Approvals
 
     func resolveApproval(

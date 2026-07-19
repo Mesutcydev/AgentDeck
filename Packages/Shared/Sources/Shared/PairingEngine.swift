@@ -42,6 +42,42 @@ public enum PairingError: Error, Equatable {
     case listenerUnavailable
 }
 
+extension PairingError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .timeout:
+            "The pairing request timed out. Keep both apps open and try a new QR code."
+        case .protocolViolation(let detail):
+            "The devices could not complete the pairing handshake (\(detail))."
+        case .identityMismatch:
+            "The Mac identity did not match the scanned pairing code. Generate a new code on the Mac."
+        case .endpointBindingMismatch:
+            "The connection did not match the secure endpoint in the pairing code."
+        case .signatureInvalid:
+            "The pairing signature could not be verified."
+        case .rejectedByPeer(let reason):
+            "The other device rejected pairing: \(reason.localizedPairingDescription)."
+        case .deviceLimitReached:
+            "The paired-device limit has been reached. Forget an old device and try again."
+        case .listenerUnavailable:
+            "The Mac pairing service is not available. Restart listening and try again."
+        }
+    }
+}
+
+private extension PairingRejectReason {
+    var localizedPairingDescription: String {
+        switch self {
+        case .revoked: "this device was revoked"
+        case .deviceLimitReached: "the paired-device limit was reached"
+        case .rateLimited: "too many attempts; wait a moment and try again"
+        case .unknownNonce, .nonceAlreadyUsed, .nonceExpired: "the QR code is no longer valid; generate a new one"
+        case .protocolMismatch: "the apps use incompatible protocol versions; update both apps"
+        case .cancelled: "confirmation was cancelled"
+        }
+    }
+}
+
 // MARK: - Server engine
 
 #if os(macOS)
@@ -303,13 +339,17 @@ public actor PairingServerEngine {
                 throw PairingError.signatureInvalid
             }
 
-            if let existing = try await repository.device(id: hello.clientDeviceID),
-               existing.publicKey == hello.clientPublicKey {
-                guard !existing.revoked else {
-                    try await connection.send(type: .pairingReject, payload: PairingReject(reason: .revoked).toJSONValue())
-                    await connection.close()
-                    return
-                }
+            let existingPeer = try await repository.device(id: hello.clientDeviceID)
+            if let existing = existingPeer,
+               existing.publicKey == hello.clientPublicKey,
+               existing.revoked,
+               hello.nonce == Data(count: 16) {
+                try await rejectAndClose(connection, reason: .revoked)
+                return
+            }
+            if let existing = existingPeer,
+               existing.publicKey == hello.clientPublicKey,
+               !existing.revoked {
                 try await repository.updateDeviceLastSeen(existing.id, at: configuration.nowProvider())
                 await connection.setPeerPublicKey(clientKey)
                 try await connection.send(
@@ -429,6 +469,13 @@ public actor PairingServerEngine {
                 pairedAt: configuration.nowProvider(),
                 lastSeenAt: configuration.nowProvider()
             )
+            // A revocation still blocks the zero-nonce silent reconnect path.
+            // Reaching here proves the user scanned a fresh, single-use offer
+            // and confirmed the phrase on both devices, so replace the stale
+            // tombstone and allow an explicit re-pair.
+            if existingPeer != nil {
+                try await repository.deleteDevice(id: peer.id)
+            }
             try await repository.insertDevice(peer)
             await connection.setPeerPublicKey(clientKey)
             try await connection.send(

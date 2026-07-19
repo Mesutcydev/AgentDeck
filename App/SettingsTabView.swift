@@ -15,7 +15,7 @@ struct SettingsTabView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DeckSpace.xl) {
+                VStack(alignment: .leading, spacing: 18) {
                     DeckPageHeader(
                         index: "05",
                         title: "Settings",

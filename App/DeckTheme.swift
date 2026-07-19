@@ -299,7 +299,7 @@ struct DeckPageHeader: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, DeckSpace.m)
+        .padding(.vertical, 10)
         .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
         .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
     }

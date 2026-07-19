@@ -34,6 +34,7 @@ struct ContentView: View {
     @State private var qrText = ""
     @State private var isPairing = false
     @State private var isShowingScanner = false
+    @State private var isShowingManualPairing = false
     @State private var devicePendingRevoke: DeviceRecord?
 
     var body: some View {
@@ -44,7 +45,7 @@ struct ContentView: View {
                     title: "Macs",
                     detail: "Trusted endpoints that host your local agents and project workspaces."
                 )
-                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: DeckSpace.l, trailing: DeckSpace.m))
+                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: 12, trailing: DeckSpace.m))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
@@ -93,37 +94,36 @@ struct ContentView: View {
                             }
                             .buttonStyle(DeckActionButtonStyle(primary: true))
                         }
-                        VStack(alignment: .leading, spacing: DeckSpace.s) {
-                            HStack {
-                                Text("MANUAL / PAYLOAD")
-                                Spacer()
-                                Text(qrText.isEmpty ? "EMPTY" : "READY")
-                                    .foregroundStyle(qrText.isEmpty ? DeckColor.ink.opacity(0.36) : DeckColor.success)
-                            }
-                            .font(.caption2.monospaced().weight(.semibold))
-                            TextField("Paste encrypted QR payload", text: $qrText, axis: .vertical)
-                                .font(DeckFont.monoSmall)
-                                .textFieldStyle(.plain)
-                                .lineLimit(3...6)
-                                .padding(DeckSpace.s)
-                                .background(DeckColor.canvas)
-                                .overlay(alignment: .leading) { Rectangle().fill(DeckColor.accent).frame(width: 2) }
-                            Button {
-                                Task { await startPairing(with: qrText) }
-                            } label: {
-                                HStack {
-                                    Text(isPairing ? "OPENING SECURE CHANNEL" : "PAIR ENDPOINT")
-                                    Spacer()
-                                    if isPairing { ProgressView().controlSize(.small) }
-                                    else { Image(systemName: "arrow.right") }
+                        DisclosureGroup(isExpanded: $isShowingManualPairing) {
+                            VStack(alignment: .leading, spacing: DeckSpace.s) {
+                                TextField("Paste encrypted QR payload", text: $qrText, axis: .vertical)
+                                    .font(DeckFont.monoSmall)
+                                    .textFieldStyle(.plain)
+                                    .lineLimit(2...4)
+                                    .padding(DeckSpace.s)
+                                    .background(DeckColor.canvas)
+                                    .overlay(alignment: .leading) { Rectangle().fill(DeckColor.accent).frame(width: 2) }
+                                Button {
+                                    Task { await startPairing(with: qrText) }
+                                } label: {
+                                    HStack {
+                                        Text(isPairing ? "OPENING SECURE CHANNEL" : "PAIR ENDPOINT")
+                                        Spacer()
+                                        if isPairing { ProgressView().controlSize(.small) }
+                                        else { Image(systemName: "arrow.right") }
+                                    }
+                                    .font(DeckFont.monoSmall.weight(.semibold))
+                                    .padding(.horizontal, DeckSpace.m)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
                                 }
-                                .font(DeckFont.monoSmall.weight(.semibold))
-                                .padding(.horizontal, DeckSpace.m)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
+                                .buttonStyle(DeckActionButtonStyle(primary: true))
+                                .disabled(qrText.isEmpty || isPairing || state.identity == nil)
                             }
-                            .buttonStyle(DeckActionButtonStyle(primary: true))
-                            .disabled(qrText.isEmpty || isPairing || state.identity == nil)
+                            .padding(.top, DeckSpace.s)
+                        } label: {
+                            Label("OR PASTE PAYLOAD", systemImage: "chevron.left.forwardslash.chevron.right")
+                                .font(DeckFont.monoSmall.weight(.semibold))
                         }
                         .padding(DeckSpace.m)
                         .background(DeckColor.surfaceRaised)
@@ -148,7 +148,7 @@ struct ContentView: View {
             .background { DeckCanvas() }
             .tint(DeckColor.accent)
             .listStyle(.plain)
-            .listSectionSpacing(DeckSpace.xl)
+            .listSectionSpacing(18)
             .navigationTitle("")
             .task {
                 await state.loadIdentity()
@@ -157,23 +157,33 @@ struct ContentView: View {
             .refreshable {
                 await state.refreshDevices()
             }
-            .alert("Revoke \(devicePendingRevoke?.displayName ?? "this Mac")?", isPresented: revokeAlertPresented) {
+            .alert(deviceAlertTitle, isPresented: revokeAlertPresented) {
                 Button("Cancel", role: .cancel) {}
-                Button("Revoke", role: .destructive) {
+                Button(devicePendingRevoke?.revoked == true ? "Forget" : "Revoke", role: .destructive) {
                     if let device = devicePendingRevoke {
                         DeckHaptics.warning()
-                        Task { await state.revoke(device) }
+                        Task {
+                            if device.revoked { await state.forget(device) }
+                            else { await state.revoke(device) }
+                        }
                     }
                 }
             } message: {
-                Text("The Mac loses access immediately and must pair again to reconnect.")
+                Text(deviceAlertMessage)
             }
             .sheet(isPresented: $isShowingScanner) {
                 NavigationStack {
                     QRScannerSheet { scannedText in
                         isShowingScanner = false
                         if QRScanParser.payload(from: scannedText) != nil {
-                            Task { await startPairing(with: scannedText) }
+                            DeckHaptics.success()
+                            // Let the camera sheet fully dismiss before pairing
+                            // requests the verification sheet. Presenting both in
+                            // the same update silently drops the confirmation UI.
+                            Task {
+                                try? await Task.sleep(for: .milliseconds(450))
+                                await startPairing(with: scannedText)
+                            }
                         } else {
                             state.setError("Scanned code is not a valid AgentDeck pairing QR.", domain: .pairing)
                         }
@@ -195,6 +205,17 @@ struct ContentView: View {
             get: { devicePendingRevoke != nil },
             set: { if !$0 { devicePendingRevoke = nil } }
         )
+    }
+
+    private var deviceAlertTitle: String {
+        let name = devicePendingRevoke?.displayName ?? "this Mac"
+        return devicePendingRevoke?.revoked == true ? "Forget \(name)?" : "Revoke \(name)?"
+    }
+
+    private var deviceAlertMessage: String {
+        devicePendingRevoke?.revoked == true
+            ? "This removes the revoked pairing from this iPhone. Pair again using a new QR code."
+            : "The Mac loses access immediately. You can forget this record and pair again with a new QR code."
     }
 
     private func startPairing(with payloadText: String) async {
@@ -232,9 +253,8 @@ private struct DeviceRow: View {
             }
             Spacer()
             if device.revoked {
-                Text("Revoked")
+                Button("Forget", role: .destructive) { requestRevoke() }
                     .font(DeckFont.footnote.weight(.medium))
-                    .foregroundStyle(DeckColor.danger)
             } else {
                 VStack(alignment: .trailing, spacing: 4) {
                     Button(isActive ? "ACTIVE" : "USE MAC") { select() }
@@ -255,7 +275,7 @@ private struct DeviceRow: View {
             if !device.revoked && !isActive {
                 Button("Use This Mac", systemImage: "arrow.triangle.swap") { select() }
             }
-            Button("Revoke", systemImage: "xmark.shield", role: .destructive) { requestRevoke() }
+            Button(device.revoked ? "Forget" : "Revoke", systemImage: device.revoked ? "trash" : "xmark.shield", role: .destructive) { requestRevoke() }
         }
     }
 }

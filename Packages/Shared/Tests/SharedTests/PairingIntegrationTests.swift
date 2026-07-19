@@ -206,6 +206,42 @@ struct PairingIntegrationTests {
         }
     }
 
+    @Test("revoked device can explicitly re-pair with a fresh QR offer")
+    func revokedDeviceCanExplicitlyRepair() async throws {
+        try await runIntegrationTest {
+        let serverRepo = try SQLiteSessionStore.inMemory()
+        let server = try await makeServer(repository: serverRepo)
+        _ = try await waitForBoundPort(on: server.engine)
+
+        let clientRepo = try SQLiteSessionStore.inMemory()
+        let client = try await makeClient(repository: clientRepo)
+        let firstOffer = await server.engine.makeOffer()
+        let (firstOutcome, firstConnection) = try await client.engine.pair(qrPayload: firstOffer.payload)
+        guard case .paired = firstOutcome else {
+            Issue.record("initial pairing failed")
+            return
+        }
+
+        try await server.engine.revokePeer(client.identity.deviceID)
+        if let firstConnection { await firstConnection.close() }
+
+        // A fresh single-use offer plus mutual phrase confirmation is an
+        // explicit authorization, unlike the blocked silent reconnect.
+        let freshOffer = await server.engine.makeOffer()
+        let (repairOutcome, repairConnection) = try await client.engine.pair(qrPayload: freshOffer.payload)
+        guard case .paired(let deviceID) = repairOutcome else {
+            Issue.record("explicit re-pair failed: \(repairOutcome)")
+            return
+        }
+        #expect(deviceID == server.identity.deviceID)
+        let peers = try await server.engine.pairedPeers()
+        #expect(peers.contains(where: { $0.id == client.identity.deviceID && !$0.revoked }))
+
+        if let repairConnection { await repairConnection.close() }
+        await server.engine.stop()
+        }
+    }
+
     @Test("client-side rejection cancels pairing")
     func clientRejection() async throws {
         try await runIntegrationTest {

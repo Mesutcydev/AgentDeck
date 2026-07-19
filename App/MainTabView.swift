@@ -206,9 +206,10 @@ private struct ApprovalInboxView: View {
                     if state.pendingApprovalRecords.isEmpty {
                         DeckEmptyLedger(
                             index: "00",
-                            title: "Queue clear",
-                            detail: "No agent action is waiting for your decision.",
-                            systemImage: "checkmark.shield"
+                            title: "Everything approved",
+                            detail: "No actions require attention.",
+                            systemImage: "checkmark.circle.fill",
+                            accent: DeckColor.success
                         )
                     } else {
                         ForEach(state.pendingApprovalRecords, id: \.request.id) { record in
@@ -242,8 +243,8 @@ private struct ApprovalInboxView: View {
                     if state.approvalRules.isEmpty {
                         DeckEmptyLedger(
                             index: "00",
-                            title: "No standing authority",
-                            detail: "Project-scoped permissions will be indexed here.",
+                            title: "No trust rules",
+                            detail: "No permanent permissions.",
                             systemImage: "slider.horizontal.3",
                             accent: DeckColor.ink
                         )
@@ -275,8 +276,8 @@ private struct ApprovalInboxView: View {
                     if state.approvalAuditEntries.isEmpty {
                         DeckEmptyLedger(
                             index: "00",
-                            title: "Ledger ready",
-                            detail: "Every allow and deny decision will be recorded here.",
+                            title: "No decisions yet",
+                            detail: "Approval history will appear here.",
                             systemImage: "clock.arrow.circlepath",
                             accent: DeckColor.ink
                         )
@@ -301,7 +302,7 @@ private struct ApprovalInboxView: View {
             .scrollContentBackground(.hidden)
             .background { DeckCanvas() }
             .listStyle(.plain)
-            .listSectionSpacing(DeckSpace.xl)
+            .listSectionSpacing(18)
             .navigationTitle("")
         } detail: {
             if let record = state.pendingApprovalRecords.first(where: { $0.request.id == selectedRequestID }) {

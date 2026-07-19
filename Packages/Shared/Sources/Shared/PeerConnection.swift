@@ -346,3 +346,14 @@ public enum PeerConnectionError: Error, Equatable {
     case closed
     case readyTimeout
 }
+
+extension PeerConnectionError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .closed:
+            "The secure connection closed before pairing completed."
+        case .readyTimeout:
+            "The Mac could not be reached. Check that AgentDeck is listening and both devices can reach the same LAN or Tailscale address."
+        }
+    }
+}

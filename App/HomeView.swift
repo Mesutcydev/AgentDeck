@@ -28,7 +28,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: DeckSpace.xl) {
+                VStack(alignment: .leading, spacing: 18) {
                     header
                     connectedMacHero
                     quickActions
@@ -41,8 +41,8 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 48)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
             }
@@ -100,14 +100,14 @@ struct HomeView: View {
     // MARK: - Header (§7.2)
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: DeckSpace.m) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: DeckSpace.s) {
-                DeckMark(size: 34, color: DeckColor.ink, showsSignal: false)
+                DeckMark(size: 28, color: DeckColor.ink, showsSignal: false)
                 HStack(spacing: 0) {
                     Text("AGENT").foregroundStyle(DeckColor.ink)
                     Text("/DECK").foregroundStyle(DeckColor.accent)
                 }
-                .font(DeckFont.display)
+                .font(.system(size: 29, weight: .black, design: .default))
                 .tracking(-1.4)
             }
             HostSwitcherButton(state: state)
@@ -122,7 +122,7 @@ struct HomeView: View {
                     pendingApprovalStatus
                 }
             }
-            .padding(.vertical, DeckSpace.s)
+            .padding(.vertical, 6)
             .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
             .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
             if state.connectionCircuitOpen {
@@ -145,7 +145,7 @@ struct HomeView: View {
     }
 
     private var connectedMacHero: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("CONNECTED MAC", systemImage: "desktopcomputer")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced)).tracking(0.8)
@@ -155,8 +155,8 @@ struct HomeView: View {
                     Text(isConnected ? "LIVE" : "OFFLINE")
                 }.font(DeckFont.monoSmall.weight(.bold)).foregroundStyle(isConnected ? DeckColor.success : .secondary)
             }
-            HStack(spacing: 16) {
-                Image(systemName: "macbook").font(.system(size: 34, weight: .medium)).frame(width: 44)
+            HStack(spacing: 12) {
+                Image(systemName: "macbook").font(.system(size: 27, weight: .medium)).frame(width: 36)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(state.pairedDevices.first?.displayName ?? "Pair a Mac")
                         .font(.system(size: 20, weight: .semibold)).lineLimit(1)
@@ -171,7 +171,7 @@ struct HomeView: View {
                 heroMetric("PROJECT", state.projects.first?.displayName ?? "—")
             }
         }
-        .foregroundStyle(DeckColor.ink).padding(18).frame(minHeight: 154)
+        .foregroundStyle(DeckColor.ink).padding(14).frame(minHeight: 136)
         .deckSurface(accent: isConnected ? DeckColor.success : nil, radius: 16)
     }
 
@@ -358,7 +358,7 @@ struct HomeView: View {
                 Label("Start Agent", systemImage: "sparkles")
                     .font(DeckFont.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 64)
+                    .frame(height: 56)
             }
             .buttonStyle(DeckActionButtonStyle(primary: true))
             .disabled(!isConnected)
@@ -369,7 +369,7 @@ struct HomeView: View {
                 Label("New Shell", systemImage: "terminal")
                     .font(DeckFont.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 64)
+                    .frame(height: 56)
             }
             .buttonStyle(DeckActionButtonStyle())
             .disabled(!isConnected)
@@ -547,7 +547,8 @@ private struct AgentCardCell: View {
                 }
             }
         }
-        .padding(.vertical, DeckSpace.s)
+        .padding(.vertical, 7)
+        .frame(minHeight: 58)
         .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(card.displayName), \(statusLine)")

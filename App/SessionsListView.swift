@@ -75,7 +75,7 @@ struct SessionsListView: View {
                     title: "Sessions",
                     detail: "Live and completed agent work, ordered by most recent activity."
                 )
-                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: DeckSpace.l, trailing: DeckSpace.m))
+                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: 12, trailing: DeckSpace.m))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
@@ -83,7 +83,8 @@ struct SessionsListView: View {
                     ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 16, trailing: 24))
+                .controlSize(.small)
+                .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 8, trailing: 24))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
@@ -221,8 +222,8 @@ private struct SessionRow: View {
                 }
             }
         }
-        .padding(.vertical, DeckSpace.xs)
-        .frame(minHeight: 72)
+        .padding(.vertical, 5)
+        .frame(minHeight: 58)
         .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
         .accessibilityElement(children: .combine)
     }
