@@ -22,6 +22,8 @@ struct AgentDeckApp: App {
         WindowGroup {
             ZStack {
                 MainTabView(state: appState)
+                    .accessibilityHidden(showsSplash || !onboardingAccepted)
+                    .allowsHitTesting(!showsSplash && onboardingAccepted)
                 if showsSplash {
                     AgentDeckSplashView {
                         withAnimation(.easeOut(duration: 0.28)) { showsSplash = false }

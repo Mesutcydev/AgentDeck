@@ -41,9 +41,11 @@ extension SessionActivityState {
 }
 
 struct SessionsListView: View {
+    private enum Filter: String, CaseIterable { case active = "Active", completed = "Completed", failed = "Failed", pinned = "Pinned" }
     @Bindable var state: IOSAppState
     @State private var path: [SessionID] = []
     @State private var searchText = ""
+    @State private var filter: Filter = .active
 
     private var matchingSessions: [SessionRecord] {
         guard !searchText.isEmpty else { return state.sessions }
@@ -56,8 +58,14 @@ struct SessionsListView: View {
         }
     }
 
-    private var activeSessions: [SessionRecord] { matchingSessions.filter(\.isActive) }
-    private var memorySessions: [SessionRecord] { matchingSessions.filter { !$0.isActive } }
+    private var filteredSessions: [SessionRecord] {
+        switch filter {
+        case .active: matchingSessions.filter(\.isActive)
+        case .completed: matchingSessions.filter { $0.state == .completed }
+        case .failed: matchingSessions.filter { $0.state.isTerminal && $0.state != .completed }
+        case .pinned: []
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -71,7 +79,15 @@ struct SessionsListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
-                if matchingSessions.isEmpty {
+                Picker("Session filter", selection: $filter) {
+                    ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 16, trailing: 24))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+                if filteredSessions.isEmpty {
                     VStack(alignment: .leading, spacing: DeckSpace.xs) {
                         Text(searchText.isEmpty ? "00 / NO SESSIONS" : "00 / NO MATCHES")
                             .font(DeckFont.monoSmall.weight(.semibold))
@@ -83,19 +99,10 @@ struct SessionsListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 } else {
-                    if !activeSessions.isEmpty {
-                        Section {
-                            sessionRows(activeSessions, isMemory: false)
-                        } header: {
-                            DeckSectionLabel(title: "Live work", eyebrow: "Active now", systemImage: "waveform.path.ecg")
-                        }
-                    }
-                    if !memorySessions.isEmpty {
-                        Section {
-                            sessionRows(memorySessions, isMemory: true)
-                        } header: {
-                            DeckSectionLabel(title: "Session memory", eyebrow: "Retained on device", systemImage: "clock.arrow.circlepath")
-                        }
+                    Section {
+                        sessionRows(filteredSessions, isMemory: filter != .active)
+                    } header: {
+                        DeckSectionLabel(title: filter.rawValue, eyebrow: "Mission log", systemImage: filter == .active ? "waveform.path.ecg" : "clock.arrow.circlepath")
                     }
                 }
             }
@@ -214,7 +221,8 @@ private struct SessionRow: View {
                 }
             }
         }
-        .padding(.vertical, DeckSpace.xxs)
+        .padding(.vertical, DeckSpace.xs)
+        .frame(minHeight: 72)
         .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
         .accessibilityElement(children: .combine)
     }

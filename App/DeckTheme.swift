@@ -16,26 +16,26 @@ import UIKit
 enum DeckSpace {
     static let xxs: CGFloat = 4
     static let xs: CGFloat = 8
-    static let s: CGFloat = 12
-    static let m: CGFloat = 16
-    static let l: CGFloat = 20
-    static let xl: CGFloat = 24
-    static let xxl: CGFloat = 32
+    static let s: CGFloat = 16
+    static let m: CGFloat = 24
+    static let l: CGFloat = 32
+    static let xl: CGFloat = 48
+    static let xxl: CGFloat = 64
 }
 
 // MARK: - Corner radii (§2.2, continuous)
 
 enum DeckRadius {
     static let chip: CGFloat = 6
-    static let card: CGFloat = 8
-    static let hero: CGFloat = 12
+    static let card: CGFloat = 16
+    static let hero: CGFloat = 16
     static let sheet: CGFloat = 20
 }
 
 // MARK: - Type scale (§2.3)
 
 enum DeckFont {
-    static let display = Font.system(size: 36, weight: .black, design: .default)
+    static let display = Font.system(size: 36, weight: .bold, design: .default)
     static let title = Font.system(.title, design: .default).weight(.bold)
     static let headline = Font.system(.title2, design: .default).weight(.semibold)
     static let subhead = Font.system(.title3, design: .default).weight(.semibold)
@@ -45,6 +45,26 @@ enum DeckFont {
     static let footnote = Font.footnote
     static let mono = Font.system(size: 13, design: .monospaced)
     static let monoSmall = Font.system(size: 12, design: .monospaced)
+}
+
+struct DeckSectionHeader: View {
+    let eyebrow: String
+    let title: String
+    var trailing: String? = nil
+
+    var body: some View {
+        HStack(alignment: .lastTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .tracking(0.96)
+                    .foregroundStyle(.secondary)
+                Text(title).font(.system(size: 22, weight: .bold))
+            }
+            Spacer()
+            if let trailing { Text(trailing).font(DeckFont.monoSmall).foregroundStyle(.secondary) }
+        }
+    }
 }
 
 // MARK: - Color (§2.5)
