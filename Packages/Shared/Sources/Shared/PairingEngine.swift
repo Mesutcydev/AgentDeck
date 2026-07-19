@@ -1067,16 +1067,22 @@ func verifyFrameSignature(
     return key.isValidSignature(frame.signature, for: bytes)
 }
 
-/// Reads the next frame with a timeout.
+/// Reads the next handshake frame with a timeout. Heartbeats are transport
+/// liveness traffic and may legitimately arrive while either person is
+/// comparing the verification phrase; they are not handshake messages and
+/// must never make pairing fail.
 func nextFrame(
     from connection: PeerConnection,
     timeout milliseconds: UInt64
 ) async throws -> SignedFrame {
     let frameTask = Task {
-        guard let frame = try await connection.readFrame() else {
-            throw PairingError.protocolViolation("connection closed mid-handshake")
+        while let frame = try await connection.readFrame() {
+            if frame.frame.type == .heartbeat {
+                continue
+            }
+            return frame
         }
-        return frame
+        throw PairingError.protocolViolation("connection closed mid-handshake")
     }
     let timeoutTask = Task {
         try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
