@@ -50,6 +50,7 @@ final class TerminalSessionModel {
     private var pendingReadableOutput = ""
     private var readableFlushScheduled = false
     private var textSanitizer = TerminalTextSanitizer()
+    private var rawTextDecoder = StreamingUTF8Decoder()
 
     init(sessionID: SessionID) {
         self.sessionID = sessionID
@@ -148,7 +149,7 @@ final class TerminalSessionModel {
     }
 
     private func appendRawOutput(_ data: Data) {
-        let chunk = String(decoding: data, as: UTF8.self)
+        let chunk = rawTextDecoder.consume(data)
         rawOutputText.append(chunk)
         pendingReadableOutput.append(textSanitizer.consume(data))
         scheduleReadableFlush()
@@ -194,6 +195,7 @@ final class TerminalSessionModel {
 private struct TerminalTextSanitizer {
     private enum State { case text, escape, csi, osc, oscEscape }
     private var state: State = .text
+    private var textDecoder = StreamingUTF8Decoder()
 
     mutating func consume(_ data: Data) -> String {
         var clean = Data()
@@ -233,6 +235,58 @@ private struct TerminalTextSanitizer {
             }
         }
 
-        return String(decoding: clean, as: UTF8.self)
+        return textDecoder.consume(clean)
+    }
+}
+
+/// Decodes transport chunks without replacing a valid UTF-8 scalar merely
+/// because its bytes arrived in different frames. Truly invalid byte
+/// sequences still use Swift's replacement-character behavior.
+private struct StreamingUTF8Decoder {
+    private var incompleteSuffix: [UInt8] = []
+
+    mutating func consume(_ data: Data) -> String {
+        guard !data.isEmpty || !incompleteSuffix.isEmpty else { return "" }
+
+        var bytes = incompleteSuffix
+        bytes.append(contentsOf: data)
+        incompleteSuffix.removeAll(keepingCapacity: true)
+
+        let suffixCount = Self.incompleteUTF8SuffixLength(in: bytes)
+        if suffixCount > 0 {
+            incompleteSuffix.append(contentsOf: bytes.suffix(suffixCount))
+            bytes.removeLast(suffixCount)
+        }
+
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    private static func incompleteUTF8SuffixLength(in bytes: [UInt8]) -> Int {
+        guard let last = bytes.last, last >= 0x80 else { return 0 }
+
+        var leadIndex = bytes.count - 1
+        var continuationCount = 0
+        while leadIndex >= 0,
+              (bytes[leadIndex] & 0xC0) == 0x80,
+              continuationCount < 3 {
+            continuationCount += 1
+            leadIndex -= 1
+        }
+
+        guard leadIndex >= 0 else {
+            return min(bytes.count, continuationCount)
+        }
+
+        let lead = bytes[leadIndex]
+        let expectedLength: Int
+        switch lead {
+        case 0xC2...0xDF: expectedLength = 2
+        case 0xE0...0xEF: expectedLength = 3
+        case 0xF0...0xF4: expectedLength = 4
+        default: return 0
+        }
+
+        let availableLength = bytes.count - leadIndex
+        return availableLength < expectedLength ? availableLength : 0
     }
 }

@@ -79,6 +79,11 @@ struct ACPAdapterTests {
         }
     }
 
+    @Test("Grok uses its native ACP stdio command")
+    func grokUsesACPStdio() async {
+        #expect(ACPLaunchProfile.grok.launchArguments == ["agent", "stdio"])
+    }
+
     @Test("generic agent defaults to terminal mode without structured approvals")
     func genericTerminalMode() async throws {
         let agent = try #require(AgentIdentifier("com.agentdeck.generic.test"))

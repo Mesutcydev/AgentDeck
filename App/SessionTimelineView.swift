@@ -29,7 +29,7 @@ struct SessionTimelineView: View {
     @State private var isFollowingLive = true
 
     var body: some View {
-        if events.isEmpty && streamedOutput.isEmpty {
+        if displayedEvents.isEmpty && streamedOutput.isEmpty {
             ContentUnavailableView(
                 "No Activity Yet",
                 systemImage: "text.bubble",
@@ -138,8 +138,12 @@ struct SessionTimelineView: View {
 
     private var displayedEvents: [AgentEvent] {
         return events.filter { event in
-            if case .approvalRequested = event.payload { return false }
-            return true
+            switch event.payload {
+            case .approvalRequested, .rawOutput:
+                return false
+            default:
+                return true
+            }
         }
     }
 

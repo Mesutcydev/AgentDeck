@@ -24,6 +24,7 @@ public struct ACPLaunchProfile: Sendable, Equatable {
 
     public static let kimi = ACPLaunchProfile(launchArguments: ["acp"])
     public static let opencode = ACPLaunchProfile(launchArguments: ["acp"])
+    public static let grok = ACPLaunchProfile(launchArguments: ["agent", "stdio"])
 }
 
 public actor ACPAgentAdapter: AgentAdapter {

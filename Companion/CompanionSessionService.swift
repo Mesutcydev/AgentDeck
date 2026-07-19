@@ -542,7 +542,11 @@ final class CompanionSessionService {
             case "com.anomaly.opencode":
                 ACPAgentAdapter.opencode(executablePath: path)
             case "com.xai.grok":
-                GrokAdapter(identifier: agent.id, executablePath: path)
+                ACPAgentAdapter(
+                    identifier: agent.id,
+                    executablePath: path,
+                    launchProfile: .grok
+                )
             default:
                 nil
             }

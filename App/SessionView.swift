@@ -55,7 +55,7 @@ struct SessionView: View {
             case .timeline:
                 SessionTimelineView(
                     events: events,
-                    streamedOutput: model.activityOutputTail,
+                    streamedOutput: "",
                     isStreaming: !session.state.isTerminal,
                     agentName: agentDisplayName,
                     agentGlyph: theme.glyph,
