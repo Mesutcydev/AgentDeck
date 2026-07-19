@@ -26,6 +26,7 @@ public enum AgentSessionOrchestratorError: Error, Equatable {
     case sessionNotFound(SessionID)
     case adapterNotRegistered(AgentIdentifier)
     case projectNotAuthorized(ProjectID)
+    case externalImportUnsupported(AgentIdentifier, ExternalSessionUnsupportedReason)
     /// §12.4 structured-session cap (same shape as the PTY supervisor's).
     case sessionLimitReached(limit: Int)
 }
@@ -101,6 +102,14 @@ public actor AgentSessionOrchestrator {
         guard let adapter = adapters[agent] else {
             throw AgentSessionOrchestratorError.adapterNotRegistered(agent)
         }
+        if let reference = configuration.providerSessionReference {
+            guard reference.providerID == agent else {
+                throw AgentSessionOrchestratorError.externalImportUnsupported(agent, .incompatibleProvider)
+            }
+            if case .unsupported(let reason) = adapter.externalSessionCapabilities.importing {
+                throw AgentSessionOrchestratorError.externalImportUnsupported(agent, reason)
+            }
+        }
         guard let project = try await repository.project(id: configuration.projectID) else {
             throw AgentSessionOrchestratorError.projectNotAuthorized(configuration.projectID)
         }
@@ -125,13 +134,18 @@ public actor AgentSessionOrchestrator {
             projectID: configuration.projectID,
             workingDirectory: workingDirectory,
             initialPrompt: configuration.initialPrompt,
-            model: configuration.model
+            model: configuration.model,
+            origin: configuration.origin,
+            providerSessionReference: configuration.providerSessionReference
         )
         let record = SessionRecord(
             id: sessionID,
             agent: agent,
             projectID: configuration.projectID,
             state: .starting,
+            agentResumeIdentifier: configuration.providerSessionReference?.externalSessionID,
+            origin: configuration.origin,
+            providerSessionReference: configuration.providerSessionReference,
             createdAt: now,
             updatedAt: now
         )

@@ -14,6 +14,10 @@ import Foundation
 public actor CodexAdapter: AgentAdapter {
     public let identifier: AgentIdentifier
     public let capabilities: AgentCapabilities
+    public nonisolated let externalSessionCapabilities = ExternalSessionCapabilities(
+        discovery: .supported,
+        importing: .supported
+    )
 
     private let executablePath: String
     private var sessions: [SessionID: CodexSession] = [:]
@@ -66,10 +70,20 @@ public actor CodexAdapter: AgentAdapter {
             ("clientInfo", .object([("name", .string("AgentDeck")), ("version", .string("1.0"))]))
         ]))
 
-        let threadResult = try await client.call(method: "thread/start", params: .object([]))
-        guard case .object(let threadObject) = threadResult,
-              let threadID = threadObject["threadId"]?.stringValue else {
-            throw CodexAppServerError.protocolError("missing threadId")
+        let threadID: String
+        if let imported = configuration.providerSessionReference {
+            threadID = imported.externalSessionID
+            _ = try await client.call(
+                method: "thread/resume",
+                params: .object([("threadId", .string(threadID))])
+            )
+        } else {
+            let threadResult = try await client.call(method: "thread/start", params: .object([]))
+            guard case .object(let threadObject) = threadResult,
+                  let startedThreadID = threadObject["threadId"]?.stringValue else {
+                throw CodexAppServerError.protocolError("missing threadId")
+            }
+            threadID = startedThreadID
         }
 
         client.setNotificationHandler { method, params in

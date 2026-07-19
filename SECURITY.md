@@ -28,6 +28,7 @@ Security outranks features. Mac companion is the only authenticated boundary. No
 | T16 | Dependency compromise | Malicious/typosquatted package | §26 policy: system-first, pinned exact versions, license + maintenance review, no transitive networking/analytics; DEPENDENCIES.md register |
 | T17 | Cloudflare hostname compromise | Tunnel endpoint hijacked | Hostname is never sufficient authentication — normal AgentDeck pairing still required (§13.5.3) |
 | T18 | Lost-device revocation failure | Revoked phone keeps access | Revocation terminates connection immediately + invalidates credentials (§13.3); lost-device revocation test (Phase 14) |
+| T19 | Local CLI socket abuse | Another account, stale client, oversized/replayed input, or shell injection | Socket parent `0700` and socket `0600`; `getpeereid` must match effective UID; version and UUID replay checks; 64 KiB cap; direct executable/argument arrays only; project authorization and executable-integrity checks before launch |
 
 Additional platform facts: APNs requires a developer-operated relay (§14.3); iOS cannot hold a permanent background WebSocket (§14.1) — both verified in Phase 0 (DECISIONS.md, A9/A10).
 
@@ -54,3 +55,9 @@ Keychain for private credentials; per-device Curve25519 pairing keys with epheme
 | F-006 | 2026-07-18 | — | Device revocation persistence | fixed@Phase14 (`SecurityHardeningTests`) |
 
 No unresolved **critical** findings.
+
+## 6. Local CLI and distribution gate (2026-07-19)
+
+The Companion bundles the `agentdeck` CLI. It does not interpolate shell text and does not take ownership of arbitrary external PTYs. A local detach leaves the supervised process running; termination is explicit. External import is metadata-only discovery followed by provider-native resume and refuses an active original process or duplicate provider session reference.
+
+Homebrew/curl metadata generation is downstream of Developer ID verification, notarization stapling, and Gatekeeper assessment. The fallback installer additionally verifies the published SHA-256 before mounting and repeats bundle identifier, code-signature, stapler, and Gatekeeper checks before installation. Publication remains blocked until those checks succeed.

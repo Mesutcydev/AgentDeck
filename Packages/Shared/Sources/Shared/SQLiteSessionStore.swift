@@ -14,7 +14,7 @@ import SQLite3
 
 public actor SQLiteSessionStore: SessionRepository {
     /// Current schema version this build ships.
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     private let database: SQLiteDatabase
 
@@ -202,6 +202,28 @@ public actor SQLiteSessionStore: SessionRepository {
             """
             ALTER TABLE devices ADD COLUMN last_known_endpoint TEXT
             """
+        ]),
+        Migration(version: 7, name: "session-origin-and-provider-reference", statements: [
+            """
+            ALTER TABLE sessions ADD COLUMN origin TEXT NOT NULL DEFAULT 'iosLaunch'
+            """,
+            """
+            ALTER TABLE sessions ADD COLUMN provider_identifier TEXT
+            """,
+            """
+            ALTER TABLE sessions ADD COLUMN provider_session_id TEXT
+            """,
+            """
+            ALTER TABLE sessions ADD COLUMN provider_compatibility_version TEXT
+            """,
+            """
+            ALTER TABLE sessions ADD COLUMN provider_imported_at INTEGER
+            """,
+            """
+            CREATE UNIQUE INDEX sessions_provider_reference_idx
+            ON sessions (provider_identifier, provider_session_id)
+            WHERE provider_session_id IS NOT NULL
+            """
         ])
     ]
 
@@ -240,8 +262,10 @@ public actor SQLiteSessionStore: SessionRepository {
     public func insertSession(_ session: SessionRecord) throws {
         try database.run("""
             INSERT INTO sessions (id, agent_identifier, project_id, state,
-                agent_resume_identifier, created_at, updated_at, ended_at, completion_summary)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                agent_resume_identifier, created_at, updated_at, ended_at, completion_summary,
+                origin, provider_identifier, provider_session_id,
+                provider_compatibility_version, provider_imported_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """) { statement in
             bind(session.id.wireString, to: statement, at: 1)
             bind(session.agent.rawValue, to: statement, at: 2)
@@ -252,6 +276,11 @@ public actor SQLiteSessionStore: SessionRepository {
             sqlite3_bind_int64(statement, 7, session.updatedAt)
             bind(session.endedAt, to: statement, at: 8)
             bind(session.completionSummary, to: statement, at: 9)
+            bind(session.origin.rawValue, to: statement, at: 10)
+            bind(session.providerSessionReference?.providerID.rawValue, to: statement, at: 11)
+            bind(session.providerSessionReference?.externalSessionID, to: statement, at: 12)
+            bind(session.providerSessionReference?.compatibilityVersion, to: statement, at: 13)
+            bind(session.providerSessionReference?.importedAt, to: statement, at: 14)
         }
     }
 
@@ -313,12 +342,26 @@ public actor SQLiteSessionStore: SessionRepository {
         else {
             throw RepositoryError.statementFailed("malformed sessions row")
         }
+        let providerReference: ProviderSessionReference? = {
+            guard let providerText = textColumn(statement, 10),
+                  let providerID = AgentIdentifier(providerText),
+                  let externalID = textColumn(statement, 11),
+                  let importedAt = optionalInt64Column(statement, 13) else { return nil }
+            return ProviderSessionReference(
+                providerID: providerID,
+                externalSessionID: externalID,
+                compatibilityVersion: textColumn(statement, 12),
+                importedAt: importedAt
+            )
+        }()
         return SessionRecord(
             id: id,
             agent: agent,
             projectID: textColumn(statement, 2).flatMap { ProjectID($0) },
             state: state,
             agentResumeIdentifier: textColumn(statement, 4),
+            origin: textColumn(statement, 9).flatMap(SessionOrigin.init(rawValue:)) ?? .iosLaunch,
+            providerSessionReference: providerReference,
             createdAt: sqlite3_column_int64(statement, 5),
             updatedAt: sqlite3_column_int64(statement, 6),
             endedAt: optionalInt64Column(statement, 7),

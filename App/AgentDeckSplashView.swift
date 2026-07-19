@@ -10,18 +10,21 @@ struct AgentDeckSplashView: View {
 
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
-            VStack(spacing: 26) {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 24) {
                 AnimatedTerminalMark(phase: phase)
-                    .frame(width: 230, height: 230)
+                    .frame(width: 220, height: 220)
                     .accessibilityHidden(true)
-                Text("AgentDeck")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .tracking(-1.2)
-                    .foregroundStyle(.black)
+                HStack(spacing: 0) {
+                    Text("AGENT")
+                        .foregroundStyle(.white)
+                    Text("/DECK")
+                        .foregroundStyle(Color(red: 1, green: 0.28, blue: 0.02))
+                }
+                    .font(.system(size: 31, weight: .black, design: .default))
+                    .tracking(-0.9)
                     .opacity(phase >= .wordmark ? 1 : 0)
-                    .offset(y: phase >= .wordmark ? 0 : 10)
-                    .blur(radius: phase >= .wordmark ? 0 : 4)
+                    .offset(y: phase >= .wordmark ? 0 : 8)
             }
             .scaleEffect(phase == .settled ? 1 : 0.985)
         }
@@ -52,13 +55,12 @@ struct AgentDeckSplashView: View {
             return
         }
         try? await Task.sleep(for: .milliseconds(140))
-        await advance(.spark, 0.20)
-        await advance(.frame, 0.50)
-        await advance(.prompt, 0.38)
-        await advance(.orangeOne, 0.14)
-        await advance(.orangeTwo, 0.13)
-        await advance(.orangeThree, 0.13)
-        await advance(.orangeFour, 0.16)
+        await advance(.frame, 0.48)
+        await advance(.prompt, 0.30)
+        await advance(.orangeOne, 0.16)
+        await advance(.orangeTwo, 0.14)
+        await advance(.orangeThree, 0.14)
+        await advance(.orangeFour, 0.20)
         await advance(.wordmark, 0.30)
         withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) { phase = .settled }
         try? await Task.sleep(for: .milliseconds(650))
@@ -68,26 +70,21 @@ struct AgentDeckSplashView: View {
 
 private struct AnimatedTerminalMark: View {
     let phase: SplashPhase
-    private let ink = Color(red: 0.035, green: 0.035, blue: 0.04)
+    private let ink = Color.white
     private let signal = Color(red: 1, green: 0.28, blue: 0.02)
 
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
-            let line = size * 0.076
+            let line = size * 0.066
             ZStack {
-                Circle().fill(signal)
-                    .frame(width: size * 0.035, height: size * 0.035)
-                    .shadow(color: signal.opacity(0.75), radius: size * 0.06)
-                    .scaleEffect(phase == .spark ? 1 : 0.001)
-                    .opacity(phase == .spark ? 1 : 0)
                 TerminalFrameShape().trim(from: 0, to: phase >= .frame ? 1 : 0)
                     .stroke(ink, style: .init(lineWidth: line, lineCap: .round, lineJoin: .round))
                     .shadow(color: ink.opacity(phase >= .frame ? 0.10 : 0), radius: 8, y: 5)
                 PromptChevronShape().trim(from: 0, to: phase >= .prompt ? 1 : 0)
                     .stroke(ink, style: .init(lineWidth: line * 0.72, lineCap: .round, lineJoin: .round))
-                Capsule().fill(ink).frame(width: size * 0.20, height: line * 0.72)
-                    .offset(x: size * 0.105, y: size * 0.13)
+                Capsule().fill(ink).frame(width: size * 0.18, height: line * 0.72)
+                    .offset(x: size * 0.10, y: size * 0.135)
                     .scaleEffect(x: phase >= .prompt ? 1 : 0, anchor: .leading)
                 segments(size: size, line: line)
             }
@@ -98,23 +95,19 @@ private struct AnimatedTerminalMark: View {
     }
 
     private func segments(size: CGFloat, line: CGFloat) -> some View {
-        let width = line * 0.82
+        let width = line
         return Group {
-            Capsule().fill(signal).frame(width: width, height: size * 0.13)
-                .offset(x: size * 0.34, y: -size * 0.23).reveal(phase >= .orangeOne)
-            Capsule().fill(signal).frame(width: width, height: size * 0.13)
-                .offset(x: size * 0.34, y: size * 0.01).reveal(phase >= .orangeTwo)
-            BottomRightRailShape()
-                .trim(from: 0, to: bottomRailProgress)
+            TopRightRailShape().trim(from: 0, to: phase >= .orangeOne ? 1 : 0)
                 .stroke(signal, style: .init(lineWidth: width, lineCap: .round, lineJoin: .round))
-                .reveal(phase >= .orangeThree)
+            Capsule().fill(signal).frame(width: width, height: size * 0.13)
+                .offset(x: size * 0.355, y: -size * 0.015).reveal(phase >= .orangeTwo)
+            Capsule().fill(signal).frame(width: width, height: size * 0.13)
+                .offset(x: size * 0.355, y: size * 0.205).reveal(phase >= .orangeThree)
+            BottomRightRailShape()
+                .trim(from: 0, to: phase >= .orangeFour ? 1 : 0)
+                .stroke(signal, style: .init(lineWidth: width, lineCap: .round, lineJoin: .round))
+                .reveal(phase >= .orangeFour)
         }
-    }
-
-    private var bottomRailProgress: CGFloat {
-        if phase >= .orangeFour { return 1 }
-        if phase >= .orangeThree { return 0.34 }
-        return 0
     }
 }
 
@@ -125,29 +118,40 @@ private extension View {
 }
 
 private enum SplashPhase: Int, Comparable {
-    case idle, spark, frame, prompt, orangeOne, orangeTwo, orangeThree, orangeFour, wordmark, settled
+    case idle, frame, prompt, orangeOne, orangeTwo, orangeThree, orangeFour, wordmark, settled
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
 private struct TerminalFrameShape: Shape {
     func path(in rect: CGRect) -> Path {
-        let minX = rect.minX + rect.width * 0.17, maxX = rect.maxX - rect.width * 0.22
-        let minY = rect.minY + rect.height * 0.17, maxY = rect.maxY - rect.height * 0.18
-        let radius = rect.width * 0.10
+        let minX = rect.width * 0.17, maxX = rect.width * 0.64
+        let minY = rect.height * 0.16, maxY = rect.height * 0.84
+        let radius = rect.width * 0.085
         var path = Path()
         path.move(to: .init(x: maxX, y: minY)); path.addLine(to: .init(x: minX + radius, y: minY))
         path.addQuadCurve(to: .init(x: minX, y: minY + radius), control: .init(x: minX, y: minY))
         path.addLine(to: .init(x: minX, y: maxY - radius))
         path.addQuadCurve(to: .init(x: minX + radius, y: maxY), control: .init(x: minX, y: maxY))
-        path.addLine(to: .init(x: rect.midX + rect.width * 0.05, y: maxY)); return path
+        path.addLine(to: .init(x: rect.width * 0.56, y: maxY)); return path
     }
 }
 
 private struct PromptChevronShape: Shape {
     func path(in rect: CGRect) -> Path {
-        var path = Path(); path.move(to: .init(x: rect.width * 0.37, y: rect.height * 0.39))
-        path.addLine(to: .init(x: rect.width * 0.52, y: rect.height * 0.50))
-        path.addLine(to: .init(x: rect.width * 0.37, y: rect.height * 0.61)); return path
+        var path = Path(); path.move(to: .init(x: rect.width * 0.35, y: rect.height * 0.39))
+        path.addLine(to: .init(x: rect.width * 0.51, y: rect.height * 0.50))
+        path.addLine(to: .init(x: rect.width * 0.35, y: rect.height * 0.61)); return path
+    }
+}
+
+private struct TopRightRailShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: .init(x: rect.width * 0.72, y: rect.height * 0.16))
+        path.addLine(to: .init(x: rect.width * 0.79, y: rect.height * 0.16))
+        path.addQuadCurve(to: .init(x: rect.width * 0.86, y: rect.height * 0.23), control: .init(x: rect.width * 0.86, y: rect.height * 0.16))
+        path.addLine(to: .init(x: rect.width * 0.86, y: rect.height * 0.29))
+        return path
     }
 }
 
@@ -156,13 +160,13 @@ private struct PromptChevronShape: Shape {
 private struct BottomRightRailShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: .init(x: rect.width * 0.61, y: rect.height * 0.86))
-        path.addLine(to: .init(x: rect.width * 0.75, y: rect.height * 0.86))
+        path.move(to: .init(x: rect.width * 0.86, y: rect.height * 0.72))
+        path.addLine(to: .init(x: rect.width * 0.86, y: rect.height * 0.77))
         path.addQuadCurve(
-            to: .init(x: rect.width * 0.84, y: rect.height * 0.77),
-            control: .init(x: rect.width * 0.84, y: rect.height * 0.86)
+            to: .init(x: rect.width * 0.79, y: rect.height * 0.84),
+            control: .init(x: rect.width * 0.86, y: rect.height * 0.84)
         )
-        path.addLine(to: .init(x: rect.width * 0.84, y: rect.height * 0.68))
+        path.addLine(to: .init(x: rect.width * 0.65, y: rect.height * 0.84))
         return path
     }
 }

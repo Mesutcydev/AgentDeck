@@ -242,6 +242,41 @@ struct PairingIntegrationTests {
         }
     }
 
+    @Test("known device can scan a fresh QR after its local pairing record was lost")
+    func knownDeviceCanExplicitlyRepair() async throws {
+        try await runIntegrationTest {
+        let serverRepo = try SQLiteSessionStore.inMemory()
+        let server = try await makeServer(repository: serverRepo)
+        _ = try await waitForBoundPort(on: server.engine)
+
+        let clientRepo = try SQLiteSessionStore.inMemory()
+        let client = try await makeClient(repository: clientRepo)
+        let firstOffer = await server.engine.makeOffer()
+        let (firstOutcome, firstConnection) = try await client.engine.pair(qrPayload: firstOffer.payload)
+        guard case .paired = firstOutcome else {
+            Issue.record("initial pairing failed")
+            return
+        }
+        if let firstConnection { await firstConnection.close() }
+
+        // Simulates reinstall/reset on iOS while the Mac still remembers the
+        // same device identity. A non-zero nonce means explicit QR pairing,
+        // not the zero-nonce reconnect shortcut.
+        try await clientRepo.deleteDevice(id: server.identity.deviceID)
+        let freshOffer = await server.engine.makeOffer()
+        let (repairOutcome, repairConnection) = try await client.engine.pair(qrPayload: freshOffer.payload)
+        guard case .paired(let deviceID) = repairOutcome else {
+            Issue.record("explicit re-pair failed: \(repairOutcome)")
+            return
+        }
+        #expect(deviceID == server.identity.deviceID)
+        #expect(try await clientRepo.listDevices().count == 1)
+
+        if let repairConnection { await repairConnection.close() }
+        await server.engine.stop()
+        }
+    }
+
     @Test("client-side rejection cancels pairing")
     func clientRejection() async throws {
         try await runIntegrationTest {

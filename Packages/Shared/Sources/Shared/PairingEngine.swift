@@ -349,7 +349,8 @@ public actor PairingServerEngine {
             }
             if let existing = existingPeer,
                existing.publicKey == hello.clientPublicKey,
-               !existing.revoked {
+               !existing.revoked,
+               hello.nonce == Data(count: 16) {
                 try await repository.updateDeviceLastSeen(existing.id, at: configuration.nowProvider())
                 await connection.setPeerPublicKey(clientKey)
                 try await connection.send(

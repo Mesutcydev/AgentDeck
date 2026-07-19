@@ -13,6 +13,10 @@ struct CompanionUserGuidePane: View {
                 guideRow("04", "Enable remote reachability", "For cellular access, keep Tailscale active on the Mac and iPhone. The signed handshake migrates the reconnect endpoint.", "network")
                 arrow
                 guideRow("05", "Review decisions", "AgentDeck never silently grants unrestricted authority. Inspect the exact action and project scope.", "checkmark.shield")
+                arrow
+                guideRow("06", "Use the terminal bridge", "Run `agentdeck run claude --project /path` to create an attachable session. Control-] detaches without stopping it.", "terminal")
+                arrow
+                guideRow("07", "Hand off existing work", "Choose Import in the menu bar. Exit the original CLI first, then resume verified Claude or Codex history under AgentDeck.", "arrow.down.to.line.compact")
                 GroupBox("User responsibility") {
                     Text("AgentDeck is a control interface, not a guarantee that an agent action is safe. You remain responsible for commands, approvals, credentials, backups, permissions, provider agreements, and applicable compliance requirements.")
                         .frame(maxWidth: .infinity, alignment: .leading)

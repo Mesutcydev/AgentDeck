@@ -26,6 +26,10 @@ public enum ClaudeAdapterError: Error, Equatable {
 public actor ClaudeAdapter: AgentAdapter {
     public let identifier: AgentIdentifier
     public let capabilities: AgentCapabilities
+    public nonisolated let externalSessionCapabilities = ExternalSessionCapabilities(
+        discovery: .supported,
+        importing: .supported
+    )
 
     private let executablePath: String
     private let hookManager: ClaudeHookManager?
@@ -45,6 +49,7 @@ public actor ClaudeAdapter: AgentAdapter {
         let projectID: ProjectID
         let workingDirectory: String
         let model: String?
+        let providerSessionID: String
         let hookDirectory: URL
         var continuation: AsyncStream<AgentEvent>.Continuation?
         var hookMonitorTask: Task<Void, Never>?
@@ -138,14 +143,17 @@ public actor ClaudeAdapter: AgentAdapter {
             }
         }
 
+        let importedReference = configuration.providerSessionReference
         sessions[sessionID] = ClaudeSession(
             handle: handle,
             projectID: configuration.projectID,
             workingDirectory: configuration.workingDirectory,
             model: configuration.model,
+            providerSessionID: importedReference?.externalSessionID ?? sessionID.wireString,
             hookDirectory: hookDirectory,
             continuation: eventContinuation,
-            hookMonitorTask: monitorTask
+            hookMonitorTask: monitorTask,
+            hasExecutedTurn: importedReference != nil
         )
 
         if let prompt = configuration.initialPrompt {
@@ -385,9 +393,9 @@ public actor ClaudeAdapter: AgentAdapter {
             arguments += ["--model", model]
         }
         if session.hasExecutedTurn {
-            arguments += ["--resume", session.handle.sessionID.wireString]
+            arguments += ["--resume", session.providerSessionID]
         } else {
-            arguments += ["--session-id", session.handle.sessionID.wireString]
+            arguments += ["--session-id", session.providerSessionID]
         }
         arguments.append(prompt.text)
         return arguments
@@ -454,7 +462,9 @@ public actor ClaudeAdapter: AgentAdapter {
             arguments += ["--model", model]
         }
         if session.hasExecutedTurn {
-            arguments += ["--resume", session.handle.sessionID.wireString]
+            arguments += ["--resume", session.providerSessionID]
+        } else {
+            arguments += ["--session-id", session.providerSessionID]
         }
         arguments.append(prompt.text)
         return arguments

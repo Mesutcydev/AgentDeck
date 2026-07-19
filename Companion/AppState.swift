@@ -64,6 +64,8 @@ final class AppState {
     private(set) var recentSessions: [SessionRecord] = []
     private(set) var projectsByID: [ProjectID: ProjectRecord] = [:]
     private(set) var approvalRules: [ApprovalRule] = []
+    private(set) var externalSessions: [ExternalSessionDescriptor] = []
+    private(set) var externalSessionError: String?
 
     // MARK: - Dependencies (injected)
 
@@ -75,6 +77,7 @@ final class AppState {
     private(set) var sessionService: CompanionSessionService?
     private(set) var pairedDevices: [DeviceRecord] = []
     private(set) var pairingWindowOpen = false
+    private(set) var importWindowOpen = false
     let sparkleController = SparkleUpdateController()
 
     /// §14.3 relay endpoint; nil means background alerts are disabled.
@@ -130,7 +133,10 @@ final class AppState {
         )
         await refreshStatus()
         await projectWorkspace?.refresh()
-        if let sessionService, let workspace = projectWorkspace {
+        // App-hosted unit tests must not open the production listener,
+        // Keychain identity, or user control socket as a launch side effect.
+        if !AppState.isRunningTests, let sessionService, let workspace = projectWorkspace {
+            sessionService.startLocalControl(discoveredAgents: workspace.discoveredAgents)
             await sessionService.refresh(
                 acceptingConnections: isAcceptingConnections,
                 discoveredAgents: workspace.discoveredAgents
@@ -336,6 +342,30 @@ final class AppState {
 
     func closePairingWindow() {
         pairingWindowOpen = false
+    }
+
+    func openImportWindow() {
+        externalSessions = sessionService?.discoverExternalSessions() ?? []
+        externalSessionError = nil
+        importWindowOpen = true
+    }
+
+    func closeImportWindow() { importWindowOpen = false }
+
+    func refreshExternalSessions() {
+        externalSessions = sessionService?.discoverExternalSessions() ?? []
+        externalSessionError = nil
+    }
+
+    func handoffExternalSession(_ descriptor: ExternalSessionDescriptor, projectPath: String?) async {
+        do {
+            _ = try await sessionService?.handoffExternalSession(descriptor, projectPath: projectPath)
+            externalSessionError = nil
+            refreshExternalSessions()
+            await refreshStatus()
+        } catch {
+            externalSessionError = error.localizedDescription
+        }
     }
 
     func revokePairedDevice(_ device: DeviceRecord) async {

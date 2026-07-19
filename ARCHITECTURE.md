@@ -47,6 +47,10 @@ Relay (verify-only). The iOS UI never sees provider-specific JSON.
 
 Dependency direction: `Shared ← App`, `Shared ← Companion`, `Shared ← Relay`. No target imports another target. Adapters live in the companion and implement `AgentAdapter` (SPEC §10.1) against Shared types only.
 
+### Local terminal control plane
+
+The Companion also owns a user-scoped Unix-domain socket at `~/Library/Application Support/AgentDeck/control.sock`. The bundled `agentdeck` executable uses the versioned `LocalControlProtocol` from Shared to launch provider processes under Companion PTY ownership, attach/detach terminal frontends, list session memory, and request safe provider-native imports. Socket mode `0600`, peer-UID verification, bounded newline-delimited messages, and replayed request-ID rejection make this a same-user control surface; it is never exposed to the network. External terminal PTYs are not seized. Import either resumes a verified provider session after its original process exits or offers a related new session.
+
 ## 3. Repository layout (ADR-0003)
 
 ```

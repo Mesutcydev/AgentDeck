@@ -109,6 +109,32 @@ struct AgentSessionOrchestratorTests {
         return (project.id, canonical)
     }
 
+    @Test("unsupported adapters reject external imports with a typed result")
+    func unsupportedExternalImport() async throws {
+        let store = try SQLiteSessionStore.inMemory()
+        let (projectID, path) = try await makeProject(in: store)
+        let agentID = try makeAgentID()
+        let orchestrator = AgentSessionOrchestrator(repository: store)
+        await orchestrator.registerAdapter(SessionStubAdapter(identifier: agentID))
+        let reference = ProviderSessionReference(
+            providerID: agentID,
+            externalSessionID: "provider-session",
+            importedAt: now
+        )
+
+        await #expect(throws: AgentSessionOrchestratorError.externalImportUnsupported(agentID, .notImplemented)) {
+            _ = try await orchestrator.startSession(
+                agent: agentID,
+                configuration: AgentLaunchConfiguration(
+                    projectID: projectID,
+                    workingDirectory: path,
+                    origin: .externalImport,
+                    providerSessionReference: reference
+                )
+            )
+        }
+    }
+
     private func makeRequest(
         sessionID: SessionID,
         projectID: ProjectID,

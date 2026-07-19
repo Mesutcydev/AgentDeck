@@ -766,3 +766,12 @@ BuildVersion:		26A5353q
 
 ### Needs-human
 Filed in DECISIONS.md: #1 name-conflict decision (before Phase 15), #2 Apple Developer Program, #3 Codex CLI install, #4 Tailscale account, #5 Cloudflare account, #6 website hosting, #7 relay hosting, #8 real provider accounts (optional). None block Phase 1.
+
+## Terminal installation and existing-session handoff — 2026-07-19
+
+- Added the bundled `agentdeck` CLI (`status`, `open`, `run`, `sessions`, `attach`, `import`, `doctor`) and a versioned, user-only Companion socket protocol.
+- Added Companion-owned PTY launch/reattachment, safe Claude/Codex external-session discovery/import, persisted session origin/provider references, and the Import Terminal Session UI.
+- Added Homebrew Cask generation, verified curl installer, checksum generation, and notarization/signature publication gates.
+- Verification: Shared migration/protocol tests pass; Companion Debug build passes with warnings as errors; bundled CLI runtime `status`/`sessions`/`doctor` pass; replayed UUID and 64 KiB input rejection pass.
+- Pairing regression fixed: a remembered non-revoked iPhone uses the silent reconnect shortcut only for the zero nonce; scanning a fresh QR after local iOS state loss now performs a complete accept/confirm handshake. The loopback regression test passes.
+- Distribution remains needs-human until a Developer ID Application identity and notarization credentials are available; scripts intentionally refuse to publish before then.

@@ -39,3 +39,5 @@ Pre-approval waives the per-dependency ADR (SPEC §26) but not this register ent
 ## Register entries
 
 All integrated dependencies are listed under **Current dependencies** above.
+
+The local `agentdeck` executable, Unix-domain socket server, external-session discovery, Homebrew Cask template, and verified fallback installer use only Swift/Foundation, Darwin, Security, and standard macOS command-line tools; they add no third-party dependency.

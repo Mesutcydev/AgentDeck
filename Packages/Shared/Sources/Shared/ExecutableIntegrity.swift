@@ -118,14 +118,14 @@ public final class ExecutableIntegrityRegistry: @unchecked Sendable {
 
     public func record(_ fingerprint: ExecutableFingerprint) {
         lock.lock()
-        baselines[fingerprint.path] = fingerprint
+        baselines[Self.canonicalKey(fingerprint.path)] = fingerprint
         lock.unlock()
     }
 
     public func baseline(forPath path: String) -> ExecutableFingerprint? {
         lock.lock()
         defer { lock.unlock() }
-        return baselines[path]
+        return baselines[Self.canonicalKey(path)]
     }
 
     /// Verifies the executable against the recorded baseline. A missing
@@ -133,12 +133,21 @@ public final class ExecutableIntegrityRegistry: @unchecked Sendable {
     /// defeats the point of the check.
     public func verify(executableAtPath path: String) throws {
         lock.lock()
-        let baseline = baselines[path]
+        let baseline = baselines[Self.canonicalKey(path)]
         lock.unlock()
         guard let baseline else {
             throw ExecutableIntegrityError.baselineMissing(path: path)
         }
         try ExecutableIntegrity.verify(atPath: path, against: baseline)
+    }
+
+    /// Treats equivalent filesystem spellings (notably macOS' `/tmp` and
+    /// `/private/tmp`) as the same executable identity.
+    private static func canonicalKey(_ path: String) -> String {
+        URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
     }
 
     public func removeAll() {

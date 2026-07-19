@@ -92,6 +92,13 @@ struct MenuBarContentView: View {
                     .buttonStyle(CompanionActionStyle(primary: true, tint: CompanionDeckColor.ink))
 
                     Button {
+                        state.openImportWindow()
+                    } label: {
+                        Label("IMPORT", systemImage: "arrow.down.to.line.compact")
+                    }
+                    .buttonStyle(CompanionActionStyle(tint: CompanionDeckColor.signal))
+
+                    Button {
                         state.openPairingWindow()
                     } label: {
                         Label("PAIR", systemImage: "iphone.gen3")

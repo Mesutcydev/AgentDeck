@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA0000000000000000000001 /* ExternalSessionDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000001 /* ExternalSessionDiscovery.swift */; };
+		AA0000000000000000000002 /* LocalControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002 /* LocalControlServer.swift */; };
+		AA0000000000000000000003 /* LocalTerminalBroker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000003 /* LocalTerminalBroker.swift */; };
+		AA0000000000000000000004 /* ImportSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000004 /* ImportSessionView.swift */; };
 		09F2BAE878988D71B4FB63FC /* CompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA28C6AB7CCB33B2BFE44D8C /* CompanionApp.swift */; };
 		0A7FBD13F2F908E8A9206E8B /* TerminalEngineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5AFA80A755998A3E37C5454 /* TerminalEngineView.swift */; };
 		0DF124A8979AB781751DB765 /* CompanionDeckTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73158F0BA8F1D56D775BBA40 /* CompanionDeckTheme.swift */; };
@@ -71,6 +75,7 @@
 		EE3871496920A8792C2C8DEB /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 36412401D435E8C3DA79E8E2 /* SwiftTerm */; };
 		F75890D65BA850F34265FABB /* SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF128DCA663E2C515A6A8112 /* SessionView.swift */; };
 		F76C2B62200B0BA1C7912FA5 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F56A0467D20F790214F9A67 /* AppStateTests.swift */; };
+		CC0000000000000000000001 /* ExternalSessionDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* ExternalSessionDiscoveryTests.swift */; };
 		FC52FF72C1CBAF9559079DAA /* LoginItemLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B47EB909C2670A8390A71DB /* LoginItemLiveTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -106,6 +111,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AB0000000000000000000001 /* ExternalSessionDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalSessionDiscovery.swift; sourceTree = "<group>"; };
+		AB0000000000000000000002 /* LocalControlServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalControlServer.swift; sourceTree = "<group>"; };
+		AB0000000000000000000003 /* LocalTerminalBroker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTerminalBroker.swift; sourceTree = "<group>"; };
+		AB0000000000000000000004 /* ImportSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportSessionView.swift; sourceTree = "<group>"; };
 		05A516313A34B0E3DAC15D99 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0B2C235DFE6AE9249D67EA98 /* CompanionUserGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionUserGuideView.swift; sourceTree = "<group>"; };
 		0BB62DDDC9499D529E7267AB /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
@@ -123,6 +132,7 @@
 		3C41DC0769F70758FD91C669 /* WidgetSummaryPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSummaryPublisher.swift; sourceTree = "<group>"; };
 		3CC54D68E1CA6C0C4352E974 /* WidgetExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3F56A0467D20F790214F9A67 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
+		CC0000000000000000000002 /* ExternalSessionDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalSessionDiscoveryTests.swift; sourceTree = "<group>"; };
 		460D40CD4ACE1450703E6833 /* AgentDeckSplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDeckSplashView.swift; sourceTree = "<group>"; };
 		4B47EB909C2670A8390A71DB /* LoginItemLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemLiveTests.swift; sourceTree = "<group>"; };
 		50090B3AA71E2F8085A8C214 /* ConnectionServiceDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionServiceDetectorTests.swift; sourceTree = "<group>"; };
@@ -279,6 +289,7 @@
 			isa = PBXGroup;
 			children = (
 				3F56A0467D20F790214F9A67 /* AppStateTests.swift */,
+				CC0000000000000000000002 /* ExternalSessionDiscoveryTests.swift */,
 				50090B3AA71E2F8085A8C214 /* ConnectionServiceDetectorTests.swift */,
 				6A3E8652AB14252DEDE4EB1C /* DiagnosticsExportTests.swift */,
 				4B47EB909C2670A8390A71DB /* LoginItemLiveTests.swift */,
@@ -309,6 +320,10 @@
 		ACCFD744CA9665F72902F1EE /* Companion */ = {
 			isa = PBXGroup;
 			children = (
+				AB0000000000000000000001 /* ExternalSessionDiscovery.swift */,
+				AB0000000000000000000004 /* ImportSessionView.swift */,
+				AB0000000000000000000002 /* LocalControlServer.swift */,
+				AB0000000000000000000003 /* LocalTerminalBroker.swift */,
 				370A3AA2B69B150CB5C013CA /* AppState.swift */,
 				A0C4A2569C1C792935C1D21C /* Assets.xcassets */,
 				BA28C6AB7CCB33B2BFE44D8C /* CompanionApp.swift */,
@@ -346,6 +361,7 @@
 				66680EF52497BE08D8E89D78 /* Sources */,
 				FD4D4D93C863EA815D615F68 /* Resources */,
 				350D5FEC213DB6940D2211A7 /* Frameworks */,
+				AC0000000000000000000001 /* Bundle AgentDeck CLI */,
 			);
 			buildRules = (
 			);
@@ -505,12 +521,34 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		AC0000000000000000000001 /* Bundle AgentDeck CLI */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Packages/Shared/Package.swift",
+				"$(SRCROOT)/Packages/Shared/Sources/AgentDeckCLI/main.swift",
+				"$(SRCROOT)/Packages/Shared/Sources/Shared/LocalControlProtocol.swift",
+			);
+			name = "Bundle AgentDeck CLI";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/agentdeck",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\nCLI_SCRATCH=\"${DERIVED_FILE_DIR}/AgentDeckCLI\"\n/usr/bin/xcrun swift build --package-path \"${SRCROOT}/Packages/Shared\" --scratch-path \"${CLI_SCRATCH}\" -c release --product agentdeck\nCLI_BIN=$(find \"${CLI_SCRATCH}\" -type f -path '*/release/agentdeck' -perm +111 -print -quit)\ntest -n \"${CLI_BIN}\"\ninstall -m 0755 \"${CLI_BIN}\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/agentdeck\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		3968D4DAC7D4E787D20B78E6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				F76C2B62200B0BA1C7912FA5 /* AppStateTests.swift in Sources */,
+				CC0000000000000000000001 /* ExternalSessionDiscoveryTests.swift in Sources */,
 				EE2464D244D2E8EFF9E24EE4 /* ConnectionServiceDetectorTests.swift in Sources */,
 				CAED4F1733F7F8593297CB7E /* DiagnosticsExportTests.swift in Sources */,
 				FC52FF72C1CBAF9559079DAA /* LoginItemLiveTests.swift in Sources */,
@@ -530,6 +568,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000001 /* ExternalSessionDiscovery.swift in Sources */,
+				AA0000000000000000000004 /* ImportSessionView.swift in Sources */,
+				AA0000000000000000000002 /* LocalControlServer.swift in Sources */,
+				AA0000000000000000000003 /* LocalTerminalBroker.swift in Sources */,
 				8E368D67B6FB80618F2D6B24 /* AppState.swift in Sources */,
 				09F2BAE878988D71B4FB63FC /* CompanionApp.swift in Sources */,
 				C598BDFF7B731A459B24CC48 /* CompanionConfirmationDelegate.swift in Sources */,

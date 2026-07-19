@@ -14,6 +14,34 @@ import Foundation
 
 // MARK: - Records (DTOs for the persisted schema)
 
+public enum SessionOrigin: String, Codable, Sendable, CaseIterable {
+    case iosLaunch
+    case companionLaunch
+    case cliWrapper
+    case externalImport
+}
+
+/// Opaque provider-owned resume identity. The identifier is never interpreted
+/// by AgentDeck and is only returned to the matching adapter.
+public struct ProviderSessionReference: Codable, Sendable, Equatable {
+    public var providerID: AgentIdentifier
+    public var externalSessionID: String
+    public var compatibilityVersion: String?
+    public var importedAt: Int64
+
+    public init(
+        providerID: AgentIdentifier,
+        externalSessionID: String,
+        compatibilityVersion: String? = nil,
+        importedAt: Int64
+    ) {
+        self.providerID = providerID
+        self.externalSessionID = externalSessionID
+        self.compatibilityVersion = compatibilityVersion
+        self.importedAt = importedAt
+    }
+}
+
 /// Persisted session metadata (§12.5).
 public struct SessionRecord: Sendable, Equatable {
     public var id: SessionID
@@ -22,6 +50,8 @@ public struct SessionRecord: Sendable, Equatable {
     public var state: SessionActivityState
     /// Provider-side resume identifier, when the agent supports resume (§12.5).
     public var agentResumeIdentifier: String?
+    public var origin: SessionOrigin
+    public var providerSessionReference: ProviderSessionReference?
     /// Unix ms.
     public var createdAt: Int64
     public var updatedAt: Int64
@@ -34,6 +64,8 @@ public struct SessionRecord: Sendable, Equatable {
         projectID: ProjectID? = nil,
         state: SessionActivityState = .starting,
         agentResumeIdentifier: String? = nil,
+        origin: SessionOrigin = .iosLaunch,
+        providerSessionReference: ProviderSessionReference? = nil,
         createdAt: Int64,
         updatedAt: Int64,
         endedAt: Int64? = nil,
@@ -44,6 +76,8 @@ public struct SessionRecord: Sendable, Equatable {
         self.projectID = projectID
         self.state = state
         self.agentResumeIdentifier = agentResumeIdentifier
+        self.origin = origin
+        self.providerSessionReference = providerSessionReference
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.endedAt = endedAt

@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/DerivedData/Build/Products/Release"
-APP="$BUILD_DIR/Companion.app"
+APP="$BUILD_DIR/AgentDeck Companion.app"
 DMG="$REPO_ROOT/dist/AgentDeck-Companion.dmg"
 
 mkdir -p "$REPO_ROOT/dist"

@@ -25,10 +25,37 @@ public struct AgentSessionStream: Sendable {
     }
 }
 
+public enum ExternalSessionUnsupportedReason: String, Codable, Sendable, Equatable {
+    case notImplemented
+    case incompatibleProvider
+    case incompatibleVersion
+}
+
+public enum ExternalSessionCapability: Sendable, Equatable {
+    case supported
+    case unsupported(ExternalSessionUnsupportedReason)
+}
+
+public struct ExternalSessionCapabilities: Sendable, Equatable {
+    public var discovery: ExternalSessionCapability
+    public var importing: ExternalSessionCapability
+
+    public init(discovery: ExternalSessionCapability, importing: ExternalSessionCapability) {
+        self.discovery = discovery
+        self.importing = importing
+    }
+
+    public static let unsupported = ExternalSessionCapabilities(
+        discovery: .unsupported(.notImplemented),
+        importing: .unsupported(.notImplemented)
+    )
+}
+
 /// §10.1 — swappable agent integration boundary.
 public protocol AgentAdapter: Sendable {
     var identifier: AgentIdentifier { get }
     var capabilities: AgentCapabilities { get }
+    var externalSessionCapabilities: ExternalSessionCapabilities { get }
 
     func inspectInstallation() async -> AgentInstallation
     func inspectAuthentication() async -> AgentAuthenticationState
@@ -43,4 +70,8 @@ public protocol AgentAdapter: Sendable {
     func interrupt(session: AgentSessionHandle) async throws
     func resume(session: AgentSessionHandle) async throws
     func terminate(session: AgentSessionHandle) async throws
+}
+
+public extension AgentAdapter {
+    var externalSessionCapabilities: ExternalSessionCapabilities { .unsupported }
 }

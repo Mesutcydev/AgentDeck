@@ -58,6 +58,26 @@ struct SessionStoreTests {
         #expect(try await second.session(id: session.id) == session)
     }
 
+    @Test("session origin and opaque provider resume reference survive migration and reopen")
+    func sessionOriginRoundTrip() async throws {
+        let path = NSTemporaryDirectory() + "/agentdeck-origin-\(UUID().uuidString).sqlite"
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let store = try SQLiteSessionStore(path: path)
+        let provider = try #require(AgentIdentifier("com.anthropic.claude-code"))
+        let record = SessionRecord(
+            id: .random(), agent: provider, state: .thinking,
+            origin: .externalImport,
+            providerSessionReference: ProviderSessionReference(
+                providerID: provider, externalSessionID: "provider-session-42",
+                compatibilityVersion: "2.1.210", importedAt: now
+            ),
+            createdAt: now, updatedAt: now
+        )
+        try await store.insertSession(record)
+        let reopened = try SQLiteSessionStore(path: path)
+        #expect(try await reopened.session(id: record.id) == record)
+    }
+
     // MARK: - Sessions CRUD
 
     @Test("insert, fetch, update state, list, active count")

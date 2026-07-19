@@ -1,0 +1,121 @@
+name: Release Companion
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version (for example 1.2.0)
+        required: true
+      tag:
+        description: Git tag (for example v1.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  notarized-release:
+    # Signing/notarization uses a controlled Apple Silicon runner. The tap is
+    # updated only after every local verification and GitHub asset upload.
+    runs-on: [self-hosted, macOS, ARM64]
+    concurrency: companion-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version and tag
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "${TAG}" == "v${VERSION}" ]]
+          git rev-parse "${TAG}^{commit}"
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.RELEASE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="${RUNNER_TEMP}/agentdeck-release.keychain-db"
+          echo "${CERTIFICATE_P12_BASE64}" | base64 --decode > "${RUNNER_TEMP}/developer-id.p12"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security import "${RUNNER_TEMP}/developer-id.p12" -k "${KEYCHAIN}" -P "${CERTIFICATE_PASSWORD}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
+          security list-keychains -d user -s "${KEYCHAIN}" login.keychain-db
+
+      - name: Test and archive signed Companion
+        env:
+          VERSION: ${{ inputs.version }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          swift test --package-path Packages/Shared
+          xcodebuild archive -project AgentDeck.xcodeproj -scheme Companion -configuration Release \
+            -destination 'generic/platform=macOS' -archivePath DerivedData/AgentDeckCompanion.xcarchive \
+            MARKETING_VERSION="${VERSION}" DEVELOPMENT_TEAM="${TEAM_ID}" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Developer ID Application'
+          mkdir -p DerivedData/Build/Products/Release
+          ditto 'DerivedData/AgentDeckCompanion.xcarchive/Products/Applications/AgentDeck Companion.app' \
+            'DerivedData/Build/Products/Release/AgentDeck Companion.app'
+
+      - name: Notarize app, package and notarize DMG
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP='DerivedData/Build/Products/Release/AgentDeck Companion.app'
+          mkdir -p dist
+          ditto -c -k --keepParent "${APP}" dist/AgentDeck-Companion.zip
+          xcrun notarytool submit dist/AgentDeck-Companion.zip --apple-id "${NOTARY_APPLE_ID}" --team-id "${NOTARY_TEAM_ID}" --password "${NOTARY_PASSWORD}" --wait
+          xcrun stapler staple "${APP}"
+          scripts/package-dmg.sh
+          xcrun notarytool submit dist/AgentDeck-Companion.dmg --apple-id "${NOTARY_APPLE_ID}" --team-id "${NOTARY_TEAM_ID}" --password "${NOTARY_PASSWORD}" --wait
+          xcrun stapler staple dist/AgentDeck-Companion.dmg
+
+      - name: Generate verified channel metadata
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${SPARKLE_PRIVATE_KEY}" > "${RUNNER_TEMP}/sparkle-private-key"
+          export SPARKLE_PRIVATE_KEY_FILE="${RUNNER_TEMP}/sparkle-private-key"
+          export SPARKLE_GENERATE_APPCAST="$(find DerivedData -type f -name generate_appcast -perm +111 -print -quit)"
+          scripts/release-distribution.sh "${VERSION}" "${TAG}" dist/AgentDeck-Companion.dmg 'DerivedData/Build/Products/Release/AgentDeck Companion.app'
+
+      - name: Publish GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --verify-tag --title "AgentDeck ${TAG}" --generate-notes
+          gh release upload "${TAG}" --clobber \
+            dist/AgentDeck-Companion.dmg \
+            dist/release-metadata/AgentDeck-Companion.dmg.sha256 \
+            dist/release-metadata/appcast.xml \
+            dist/release-metadata/installer.json \
+            scripts/install.sh
+
+      - name: Update Homebrew tap after assets are live
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/Mesutcydev/homebrew-agentdeck.git" "${RUNNER_TEMP}/homebrew-agentdeck"
+          install -m 0644 dist/release-metadata/agentdeck.rb "${RUNNER_TEMP}/homebrew-agentdeck/Casks/agentdeck.rb"
+          cd "${RUNNER_TEMP}/homebrew-agentdeck"
+          git config user.name 'agentdeck-release-bot'
+          git config user.email 'release-bot@users.noreply.github.com'
+          git add Casks/agentdeck.rb
+          git diff --cached --quiet || git commit -m "agentdeck ${{ inputs.version }}"
+          git push

@@ -10,7 +10,8 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
-        .library(name: "Shared", targets: ["Shared"])
+        .library(name: "Shared", targets: ["Shared"]),
+        .executable(name: "agentdeck", targets: ["AgentDeckCLI"])
     ],
     targets: [
         .target(
@@ -20,6 +21,11 @@ let package = Package(
                 // implies complete strict concurrency; kept explicit per SPEC §6.
                 .swiftLanguageMode(.v6)
             ]
+        ),
+        .executableTarget(
+            name: "AgentDeckCLI",
+            dependencies: ["Shared"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "SharedTests",

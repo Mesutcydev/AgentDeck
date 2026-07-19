@@ -72,19 +72,25 @@ public struct AgentLaunchConfiguration: Sendable, Equatable {
     public let initialPrompt: PromptInput?
     /// Provider model selector, when the user picked one (§11.1).
     public let model: String?
+    public let origin: SessionOrigin
+    public let providerSessionReference: ProviderSessionReference?
 
     public init(
         sessionID: SessionID = .random(),
         projectID: ProjectID,
         workingDirectory: String,
         initialPrompt: PromptInput? = nil,
-        model: String? = nil
+        model: String? = nil,
+        origin: SessionOrigin = .iosLaunch,
+        providerSessionReference: ProviderSessionReference? = nil
     ) {
         self.sessionID = sessionID
         self.projectID = projectID
         self.workingDirectory = workingDirectory
         self.initialPrompt = initialPrompt
         self.model = model
+        self.origin = origin
+        self.providerSessionReference = providerSessionReference
     }
 }
 

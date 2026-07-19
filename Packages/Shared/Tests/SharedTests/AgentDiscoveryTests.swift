@@ -40,7 +40,11 @@ struct AgentDiscoveryTests {
             return
         }
         #expect(version.contains("test-codex"))
-        #expect(results[0].installation.executablePath == fixture)
+        let discoveredPath = results[0].installation.executablePath.map {
+            URL(fileURLWithPath: $0).resolvingSymlinksInPath().path
+        }
+        let expectedPath = URL(fileURLWithPath: fixture).resolvingSymlinksInPath().path
+        #expect(discoveredPath == expectedPath)
         // Discovery pins the executable: unsigned fixture script → nil team,
         // but a SHA-256 baseline must be recorded for launch-time verify.
         #expect(results[0].codeSigningTeam == nil)

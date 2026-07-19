@@ -166,6 +166,14 @@ No assumption required an ADR amending a design section; A3's caveat and A5's pa
 
 ---
 
+### ADR-0021 — Existing terminal sessions use safe provider-native handoff; universal attachment begins at AgentDeck-owned process creation
+- **Context:** macOS provides no supported mechanism for safely seizing an arbitrary Terminal PTY. Claiming such an attachment would risk process corruption and misrepresent control.
+- **Decision:** `agentdeck run` asks Companion to own the PTY from process creation and supports local/iOS streaming plus later reattachment. External discovery is metadata-only. Import refuses an active source process, preserves the opaque provider session identifier, and resumes only adapters/versions with verified native support. Unsupported providers start a clearly labeled related session instead. The local protocol is a same-user, versioned Unix socket rather than localhost TCP.
+- **Consequences:** every provider has a reliable wrapper path; Claude and Codex have initial native handoff seams; Grok remains wrapper-only; Kimi/OpenCode stay disabled until version-specific resume behavior is proven. Detach never implies termination.
+- **Reversible?** Yes — adapters can add typed discovery/import support as provider contracts stabilize without changing the CLI command surface.
+
+---
+
 ## NEEDS-HUMAN
 
 ### NEEDS-HUMAN #1 — Product name conflict ("AgentDeck")
