@@ -75,6 +75,19 @@ struct AppStateTests {
         #expect(reloaded.isAcceptingConnections == false)
     }
 
+    @Test("Prevent idle sleep preference persists")
+    func preventIdleSleepPersists() async throws {
+        let defaults = try makeDefaults()
+        let state = try makeState(defaults: defaults)
+        #expect(state.preventIdleSleep == false)
+
+        await state.setPreventIdleSleep(true)
+        #expect(state.preventIdleSleep == true)
+
+        let reloaded = try makeState(defaults: defaults)
+        #expect(reloaded.preventIdleSleep == true)
+    }
+
     @Test("onboarding completes once and the flag persists (§12.1)")
     func onboardingOnce() async throws {
         let defaults = try makeDefaults()

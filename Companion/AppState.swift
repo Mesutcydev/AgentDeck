@@ -38,6 +38,7 @@ final class AppState {
     enum DefaultsKey {
         static let onboardingCompleted = "onboardingCompleted"
         static let remoteAccessPaused = "remoteAccessPaused"
+        static let preventIdleSleep = "preventIdleSleep"
         static let relayBaseURLString = "relayBaseURLString"
     }
 
@@ -49,6 +50,10 @@ final class AppState {
 
     private(set) var remoteAccessPaused: Bool {
         didSet { defaults.set(remoteAccessPaused, forKey: DefaultsKey.remoteAccessPaused) }
+    }
+
+    private(set) var preventIdleSleep: Bool {
+        didSet { defaults.set(preventIdleSleep, forKey: DefaultsKey.preventIdleSleep) }
     }
 
     // MARK: - Live status (real sources; counts come from the session store)
@@ -83,6 +88,7 @@ final class AppState {
     /// §14.3 relay endpoint; nil means background alerts are disabled.
     private(set) var relayBaseURL: URL?
     private var relayCoordinator: RelayNotificationCoordinator?
+    private var idleSleepActivity: (any NSObjectProtocol)?
 
     init(
         defaults: UserDefaults,
@@ -111,6 +117,7 @@ final class AppState {
         }
         self.onboardingCompleted = defaults.bool(forKey: DefaultsKey.onboardingCompleted)
         self.remoteAccessPaused = defaults.bool(forKey: DefaultsKey.remoteAccessPaused)
+        self.preventIdleSleep = defaults.bool(forKey: DefaultsKey.preventIdleSleep)
         self.loginItemStatus = loginItemManager.status
         configureRelay()
     }
@@ -126,6 +133,7 @@ final class AppState {
     /// Called once at app start: activation policy + initial counts.
     func start() async {
         applyActivationPolicy()
+        applyIdleSleepPolicy()
         Log.logger(.session).info("companion started (paused: \(self.remoteAccessPaused, privacy: .public))")
         await recorder.record(
             category: .session, level: .info,
@@ -141,6 +149,34 @@ final class AppState {
                 acceptingConnections: isAcceptingConnections,
                 discoveredAgents: workspace.discoveredAgents
             )
+        }
+    }
+
+    // MARK: - Mac availability
+
+    /// Keeps the Companion reachable while the Mac is idle. This blocks
+    /// automatic idle system sleep only; it does not override lid close,
+    /// shutdown, or a user-selected Sleep command.
+    func setPreventIdleSleep(_ enabled: Bool) async {
+        preventIdleSleep = enabled
+        applyIdleSleepPolicy()
+        await recorder.record(
+            category: .transport,
+            level: .notice,
+            message: "prevent idle sleep \(enabled ? "enabled" : "disabled")"
+        )
+    }
+
+    private func applyIdleSleepPolicy() {
+        if preventIdleSleep {
+            guard idleSleepActivity == nil, !Self.isRunningTests else { return }
+            idleSleepActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleSystemSleepDisabled, .userInitiated],
+                reason: "Keep AgentDeck Companion reachable for paired devices"
+            )
+        } else if let idleSleepActivity {
+            ProcessInfo.processInfo.endActivity(idleSleepActivity)
+            self.idleSleepActivity = nil
         }
     }
 

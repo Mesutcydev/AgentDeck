@@ -119,6 +119,15 @@ private struct GeneralSettingsPane: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            Section("Availability") {
+                Toggle("Prevent Mac from Sleeping", isOn: Binding(
+                    get: { state.preventIdleSleep },
+                    set: { enabled in Task { await state.setPreventIdleSleep(enabled) } }
+                ))
+                Text("Keeps AgentDeck reachable during idle time. Closing a MacBook lid, choosing Sleep, or shutting down still disconnects devices.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             Section("Remote Access") {
                 Toggle("Pause Remote Access", isOn: Binding(
                     get: { state.remoteAccessPaused },
