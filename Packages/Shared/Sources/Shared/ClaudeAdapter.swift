@@ -632,7 +632,9 @@ public actor ClaudeAdapter: AgentAdapter {
                         confidence: .versionedStream,
                         payload: .failed(AgentErrorInfo(
                             code: "claude.result",
-                            message: errorText.flatMap { $0.isEmpty ? nil : $0 } ?? "Claude turn failed",
+                            message: errorText.flatMap { $0.isEmpty ? nil : $0 }
+                                ?? summary.flatMap { $0.isEmpty ? nil : $0 }
+                                ?? "Claude turn failed",
                             recovery: .retry
                         ))
                     ),

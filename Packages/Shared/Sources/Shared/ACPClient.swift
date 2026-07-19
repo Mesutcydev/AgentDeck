@@ -164,8 +164,6 @@ public final class ACPClient: @unchecked Sendable {
             ("method", .string(method)),
             ("params", params)
         ])
-        try writeLine(request)
-
         // Deadline-based timeout: a hung agent fails the call instead of
         // leaking the continuation and suspending the caller forever.
         let timeoutNanos = UInt64(max(0.05, configuration.requestTimeoutSeconds) * 1_000_000_000)
@@ -183,6 +181,14 @@ public final class ACPClient: @unchecked Sendable {
             lock.lock()
             pending[id] = continuation
             lock.unlock()
+            do {
+                try writeLine(request)
+            } catch {
+                failPending(
+                    id: id,
+                    error: (error as? ACPClientError) ?? .protocolError(error.localizedDescription)
+                )
+            }
         }
     }
 
@@ -215,7 +221,10 @@ public final class ACPClient: @unchecked Sendable {
     public func sessionNew(cwd: String) async throws -> String {
         let result = try await call(
             method: "session/new",
-            params: .object([("cwd", .string(cwd))])
+            params: .object([
+                ("cwd", .string(cwd)),
+                ("mcpServers", .array([]))
+            ])
         )
         guard case .object(let entries) = result,
               let sessionID = entries["sessionId"]?.stringValue ?? entries["sessionID"]?.stringValue else {
@@ -273,7 +282,9 @@ public final class ACPClient: @unchecked Sendable {
         guard let continuation else { return }
         if let error = object["error"] {
             continuation.resume(throwing: ACPClientError.protocolError(
-                error.stringValue ?? "rpc error"
+                error.stringValue
+                    ?? error.optionalField("message")?.stringValue
+                    ?? error.canonicalString()
             ))
         } else if let result = object["result"] {
             continuation.resume(returning: result)

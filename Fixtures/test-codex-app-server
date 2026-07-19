@@ -44,13 +44,14 @@ def main() -> int:
 
         if method == "thread/start":
             notify("thread/started", {"threadId": thread_id})
-            respond({"jsonrpc": "2.0", "id": req_id, "result": {"threadId": thread_id}})
+            respond({"jsonrpc": "2.0", "id": req_id, "result": {"thread": {"id": thread_id}}})
             continue
 
         if method == "turn/start":
             params = message.get("params") or {}
-            text = (params.get("input") or {}).get("text", "")
-            notify("turn/agentMessageDelta", {"delta": f"Echo: {text}"})
+            inputs = params.get("input") or []
+            text = inputs[0].get("text", "") if inputs and isinstance(inputs[0], dict) else ""
+            notify("item/agentMessage/delta", {"delta": f"Echo: {text}"})
             notify(
                 "approval/request",
                 {

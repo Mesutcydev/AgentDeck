@@ -42,11 +42,13 @@ final class SessionStubAdapter: AgentAdapter, @unchecked Sendable {
     )
 
     private let launchEvents: [AgentEvent]
+    private let failsLaunch: Bool
     private let deliveredDecisions = Mutex<[ApprovalChoice]>([])
 
-    init(identifier: AgentIdentifier, launchEvents: [AgentEvent] = []) {
+    init(identifier: AgentIdentifier, launchEvents: [AgentEvent] = [], failsLaunch: Bool = false) {
         self.identifier = identifier
         self.launchEvents = launchEvents
+        self.failsLaunch = failsLaunch
     }
 
     var decisions: [ApprovalChoice] { deliveredDecisions.withLock { $0 } }
@@ -58,6 +60,7 @@ final class SessionStubAdapter: AgentAdapter, @unchecked Sendable {
     func inspectAuthentication() async -> AgentAuthenticationState { .authenticated }
 
     func launch(configuration: AgentLaunchConfiguration) async throws -> AgentSessionStream {
+        if failsLaunch { throw CocoaError(.executableNotLoadable) }
         let handle = AgentSessionHandle(sessionID: configuration.sessionID, agent: identifier)
         let events = launchEvents
         return AgentSessionStream(
@@ -92,6 +95,27 @@ struct AgentSessionOrchestratorTests {
 
     private func makeAgentID() throws -> AgentIdentifier {
         try #require(AgentIdentifier("com.example.adapter"))
+    }
+
+    @Test("a failed provider handshake becomes terminal instead of a phantom active session")
+    func failedLaunchBecomesTerminal() async throws {
+        let store = try SQLiteSessionStore.inMemory()
+        let (projectID, path) = try await makeProject(in: store)
+        let agentID = try makeAgentID()
+        let orchestrator = AgentSessionOrchestrator(repository: store, nowProvider: { self.now })
+        await orchestrator.registerAdapter(SessionStubAdapter(identifier: agentID, failsLaunch: true))
+
+        await #expect(throws: (any Error).self) {
+            _ = try await orchestrator.startSession(
+                agent: agentID,
+                configuration: AgentLaunchConfiguration(projectID: projectID, workingDirectory: path)
+            )
+        }
+
+        let sessions = try await store.listSessions()
+        #expect(sessions.count == 1)
+        #expect(sessions.first?.state == .failed)
+        #expect(try await store.countActiveSessions() == 0)
     }
 
     private func makeProject(in store: SQLiteSessionStore) async throws -> (ProjectID, String) {

@@ -21,6 +21,7 @@ public actor CodexAdapter: AgentAdapter {
 
     private let executablePath: String
     private var sessions: [SessionID: CodexSession] = [:]
+    private var pendingApprovalRPCs: [ApprovalRequestID: Int64] = [:]
 
     private struct CodexSession {
         let handle: AgentSessionHandle
@@ -78,9 +79,12 @@ public actor CodexAdapter: AgentAdapter {
                 params: .object([("threadId", .string(threadID))])
             )
         } else {
-            let threadResult = try await client.call(method: "thread/start", params: .object([]))
-            guard case .object(let threadObject) = threadResult,
-                  let startedThreadID = threadObject["threadId"]?.stringValue else {
+            let threadResult = try await client.call(
+                method: "thread/start",
+                params: .object([("cwd", .string(configuration.workingDirectory))])
+            )
+            guard let startedThreadID = threadResult.optionalField("threadId")?.stringValue
+                ?? threadResult.optionalField("thread")?.optionalField("id")?.stringValue else {
                 throw CodexAppServerError.protocolError("missing threadId")
             }
             threadID = startedThreadID
@@ -89,6 +93,14 @@ public actor CodexAdapter: AgentAdapter {
         client.setNotificationHandler { method, params in
             Task { await self.handleNotification(
                 sessionID: sessionID,
+                method: method,
+                params: params
+            ) }
+        }
+        client.setRequestHandler { id, method, params in
+            Task { await self.handleServerRequest(
+                sessionID: sessionID,
+                requestID: id,
                 method: method,
                 params: params
             ) }
@@ -129,14 +141,22 @@ public actor CodexAdapter: AgentAdapter {
         in session: AgentSessionHandle
     ) async throws {
         guard let codex = sessions[session.sessionID] else { return }
-        let approved = decision.choice == .allowOnce
-        _ = try await codex.client.call(
-            method: "approval/respond",
-            params: .object([
-                ("requestId", .string(requestID.wireString)),
-                ("decision", .string(approved ? "approved" : "denied"))
-            ])
-        )
+        if let rpcID = pendingApprovalRPCs.removeValue(forKey: requestID) {
+            let response = decision.choice.authorizes ? "accept" : "decline"
+            try codex.client.respond(
+                id: rpcID,
+                result: .object([("decision", .string(response))])
+            )
+        } else {
+            // Compatibility with older app-server fixtures and releases.
+            _ = try await codex.client.call(
+                method: "approval/respond",
+                params: .object([
+                    ("requestId", .string(requestID.wireString)),
+                    ("decision", .string(decision.choice.authorizes ? "approved" : "denied"))
+                ])
+            )
+        }
     }
 
     public func interrupt(session: AgentSessionHandle) async throws {
@@ -178,6 +198,54 @@ public actor CodexAdapter: AgentAdapter {
         sessions[sessionID]?.continuation
     }
 
+    private func handleServerRequest(
+        sessionID: SessionID,
+        requestID: Int64,
+        method: String,
+        params: JSONValue
+    ) {
+        guard let codex = sessions[sessionID], let continuation = codex.continuation else { return }
+        guard method == "item/commandExecution/requestApproval"
+                || method == "item/fileChange/requestApproval" else {
+            try? codex.client.respond(
+                id: requestID,
+                result: .object([("decision", .string("decline"))])
+            )
+            return
+        }
+
+        let approvalID = ApprovalRequestID.random()
+        pendingApprovalRPCs[approvalID] = requestID
+        let isCommand = method == "item/commandExecution/requestApproval"
+        let command = params.optionalField("command")?.stringValue
+        let reason = params.optionalField("reason")?.stringValue
+        let action = command ?? reason ?? (isCommand ? "Run a command" : "Apply file changes")
+        guard let confidence = ApprovalEligibleConfidence(.native) else { return }
+        let request = ApprovalRequest(
+            id: approvalID,
+            agent: identifier,
+            projectID: codex.projectID,
+            sessionID: sessionID,
+            tool: isCommand ? "shell" : "file change",
+            exactAction: action,
+            explanation: reason ?? action,
+            workingDirectory: params.optionalField("cwd")?.stringValue ?? codex.workingDirectory,
+            risk: .medium,
+            reversibility: .unknown,
+            originalProviderPayload: params,
+            confidence: confidence,
+            createdAt: Date.unixMillisecondsNow
+        )
+        continuation.yield(AgentEvent(
+            sessionID: sessionID,
+            agent: identifier,
+            sequence: 0,
+            timestamp: request.createdAt,
+            confidence: .native,
+            payload: .approvalRequested(request)
+        ))
+    }
+
     private func sendTurn(
         prompt: PromptInput,
         sessionID: SessionID,
@@ -188,7 +256,10 @@ public actor CodexAdapter: AgentAdapter {
             method: "turn/start",
             params: .object([
                 ("threadId", .string(threadID)),
-                ("input", .object([("text", .string(prompt.text))]))
+                ("input", .array([.object([
+                    ("type", .string("text")),
+                    ("text", .string(prompt.text))
+                ])]))
             ])
         )
     }
@@ -202,7 +273,7 @@ public actor CodexAdapter: AgentAdapter {
     ) -> AgentEvent? {
         let now = Date.unixMillisecondsNow
         switch method {
-        case "turn/agentMessageDelta":
+        case "turn/agentMessageDelta", "item/agentMessage/delta":
             guard let delta = params.optionalField("delta")?.stringValue ?? params.stringValue else {
                 return uncertainRaw(params, sessionID: sessionID, reason: "unparsed agent delta")
             }

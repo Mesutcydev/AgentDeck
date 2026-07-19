@@ -52,6 +52,14 @@ def main() -> int:
             continue
 
         if method == "session/new":
+            params = message.get("params") or {}
+            if not isinstance(params.get("mcpServers"), list):
+                respond({
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32602, "message": "mcpServers is required"},
+                })
+                continue
             respond({
                 "jsonrpc": "2.0",
                 "id": req_id,

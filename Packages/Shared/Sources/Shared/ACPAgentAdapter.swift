@@ -216,11 +216,15 @@ public actor ACPAgentAdapter: AgentAdapter {
         acp: ACPSession
     ) -> AgentEvent? {
         let now = Date.unixMillisecondsNow
-        if let updateType = params.optionalField("updateType")?.stringValue ?? params.optionalField("type")?.stringValue {
+        let update = params.optionalField("update") ?? params
+        if let updateType = update.optionalField("sessionUpdate")?.stringValue
+            ?? update.optionalField("updateType")?.stringValue
+            ?? update.optionalField("type")?.stringValue {
             switch updateType {
             case "agent_message_chunk", "message_chunk", "text":
-                let text = params.optionalField("text")?.stringValue
-                    ?? params.optionalField("content")?.stringValue
+                let text = update.optionalField("text")?.stringValue
+                    ?? update.optionalField("content")?.stringValue
+                    ?? update.optionalField("content")?.optionalField("text")?.stringValue
                     ?? ""
                 guard !text.isEmpty else { return nil }
                 return AgentEvent(
@@ -231,6 +235,20 @@ public actor ACPAgentAdapter: AgentAdapter {
                     confidence: .native,
                     payload: .messageText(MessageText(role: .agent, text: text))
                 )
+            case "user_message_chunk":
+                guard let text = update.optionalField("content")?.optionalField("text")?.stringValue,
+                      !text.isEmpty else { return nil }
+                return AgentEvent(
+                    sessionID: sessionID,
+                    agent: identifier,
+                    sequence: 0,
+                    timestamp: now,
+                    confidence: .native,
+                    payload: .messageText(MessageText(role: .user, text: text))
+                )
+            case "agent_thought_chunk", "available_commands_update", "usage_update":
+                // Provider metadata is intentionally not presented as chat.
+                return nil
             case "turn_completed", "completed":
                 return AgentEvent(
                     sessionID: sessionID,
@@ -241,10 +259,10 @@ public actor ACPAgentAdapter: AgentAdapter {
                     payload: .completed(CompletionResult(succeeded: true, summary: "turn completed"))
                 )
             default:
-                return uncertainRaw(params, sessionID: sessionID, reason: "unknown session/update \(updateType)")
+                return uncertainRaw(update, sessionID: sessionID, reason: "unknown session/update \(updateType)")
             }
         }
-        if let text = params.optionalField("text")?.stringValue, !text.isEmpty {
+        if let text = update.optionalField("text")?.stringValue, !text.isEmpty {
             return AgentEvent(
                 sessionID: sessionID,
                 agent: identifier,

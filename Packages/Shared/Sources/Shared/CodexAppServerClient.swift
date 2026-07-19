@@ -49,6 +49,7 @@ public final class CodexAppServerClient: @unchecked Sendable {
     private var pending: [Int64: CheckedContinuation<JSONValue, Error>] = [:]
     private var lineBuffer = BoundedLineBuffer()
     private var notificationHandler: (@Sendable (String, JSONValue) -> Void)?
+    private var requestHandler: (@Sendable (Int64, String, JSONValue) -> Void)?
 
     public init(configuration: Configuration) {
         self.configuration = configuration
@@ -60,6 +61,22 @@ public final class CodexAppServerClient: @unchecked Sendable {
         lock.lock()
         notificationHandler = handler
         lock.unlock()
+    }
+
+    public func setRequestHandler(
+        _ handler: @escaping @Sendable (Int64, String, JSONValue) -> Void
+    ) {
+        lock.lock()
+        requestHandler = handler
+        lock.unlock()
+    }
+
+    public func respond(id: Int64, result: JSONValue) throws {
+        try writeLine(.object([
+            ("jsonrpc", .string("2.0")),
+            ("id", .int(id)),
+            ("result", result)
+        ]))
     }
 
     public func start() throws {
@@ -122,8 +139,6 @@ public final class CodexAppServerClient: @unchecked Sendable {
             ("method", .string(method)),
             ("params", params)
         ])
-        try writeLine(request)
-
         // Deadline-based timeout: a hung agent fails the call instead of
         // leaking the continuation and suspending the caller forever.
         let timeoutNanos = UInt64(max(0.05, configuration.requestTimeoutSeconds) * 1_000_000_000)
@@ -141,6 +156,14 @@ public final class CodexAppServerClient: @unchecked Sendable {
             lock.lock()
             pending[id] = continuation
             lock.unlock()
+            do {
+                try writeLine(request)
+            } catch {
+                failPending(
+                    id: id,
+                    error: (error as? CodexAppServerError) ?? .protocolError(error.localizedDescription)
+                )
+            }
         }
     }
 
@@ -181,9 +204,14 @@ public final class CodexAppServerClient: @unchecked Sendable {
         if let method = object["method"]?.stringValue {
             let params = object["params"] ?? .null
             lock.lock()
+            let requestHandler = self.requestHandler
             let handler = notificationHandler
             lock.unlock()
-            handler?(method, params)
+            if let id = object["id"]?.intValue {
+                requestHandler?(id, method, params)
+            } else {
+                handler?(method, params)
+            }
             return
         }
         guard let id = object["id"]?.intValue else { return }
@@ -193,7 +221,9 @@ public final class CodexAppServerClient: @unchecked Sendable {
         guard let continuation else { return }
         if let error = object["error"] {
             continuation.resume(throwing: CodexAppServerError.protocolError(
-                error.stringValue ?? "rpc error"
+                error.stringValue
+                    ?? error.optionalField("message")?.stringValue
+                    ?? error.canonicalString()
             ))
         } else if let result = object["result"] {
             continuation.resume(returning: result)

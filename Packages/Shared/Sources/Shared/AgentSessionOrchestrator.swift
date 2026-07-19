@@ -168,7 +168,21 @@ public actor AgentSessionOrchestrator {
         )
         try await repository.insertSession(record)
 
-        let stream = try await adapter.launch(configuration: launchConfig)
+        let stream: AgentSessionStream
+        do {
+            stream = try await adapter.launch(configuration: launchConfig)
+        } catch {
+            // A failed provider handshake must not remain a phantom active
+            // session or consume one of the concurrent-session slots.
+            try? await repository.updateSessionState(
+                id: sessionID,
+                state: .failed,
+                updatedAt: nowProvider(),
+                endedAt: nowProvider(),
+                completionSummary: error.localizedDescription
+            )
+            throw error
+        }
         var active = ActiveSession(
             handle: stream.handle,
             adapter: agent,
