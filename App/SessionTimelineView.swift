@@ -95,7 +95,7 @@ struct SessionTimelineView: View {
                         .padding(.top, DeckSpace.l)
                         .padding(.bottom, DeckSpace.xl)
                     }
-                    .defaultScrollAnchor(.bottom)
+                    .scrollDismissesKeyboard(.interactively)
                     .onScrollGeometryChange(for: Bool.self) { geometry in
                         let distanceFromBottom = geometry.contentSize.height
                             - geometry.containerSize.height

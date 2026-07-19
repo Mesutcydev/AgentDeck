@@ -177,16 +177,54 @@ final class TerminalSessionModel {
         pendingReadableOutput.removeAll(keepingCapacity: true)
 
         readableOutputText.append(update)
-        activityOutputTail.append(update)
 
         if readableOutputText.count > 128_000 {
             readableOutputText = String(readableOutputText.suffix(64_000))
         }
-        // Keep enough context for a useful chat response while bounding Text
-        // layout to a small, predictable cost. Full history remains in Console.
-        if activityOutputTail.count > 24_000 {
-            activityOutputTail = String(activityOutputTail.suffix(16_000))
+        // PTY TUIs repaint the same status line many times. Activity is a
+        // conversation, so reduce those redraws to one readable occurrence;
+        // the byte-perfect transcript remains available in Console.
+        activityOutputTail = TerminalActivityFormatter.format(readableOutputText)
+    }
+}
+
+private enum TerminalActivityFormatter {
+    static func format(_ text: String) -> String {
+        let source = text.suffix(64_000)
+        var lines: [String] = []
+        lines.reserveCapacity(256)
+
+        for rawLine in source.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+            let line = String(rawLine).trimmingCharacters(in: CharacterSet.whitespaces)
+            guard !line.isEmpty, !isTerminalHandshake(line) else { continue }
+
+            // Full-screen CLIs frequently repaint an identical line without
+            // advancing their semantic conversation. Keep the newest copy.
+            if lines.suffix(12).contains(line) { continue }
+            lines.append(line)
         }
+
+        // Bound SwiftUI text layout while keeping complete recent messages.
+        return lines.suffix(240).joined(separator: "\n").suffixString(16_000)
+    }
+
+    private static func isTerminalHandshake(_ line: String) -> Bool {
+        let compact = line.replacingOccurrences(of: " ", with: "")
+        guard compact.count < 180 else { return false }
+        return compact.hasPrefix("]0;")
+            || compact.hasPrefix("[?")
+            || compact.hasPrefix("[>")
+            || compact.contains("Capabilities\\")
+            || (compact.filter { $0 == "?" }.count >= 2
+                && compact.filter { $0 == ";" }.count >= 3)
+            || compact.range(of: #"^\[[0-9;?<>]*[A-Za-z]"#, options: .regularExpression) != nil
+    }
+}
+
+private extension String {
+    func suffixString(_ maximumLength: Int) -> String {
+        guard count > maximumLength else { return self }
+        return String(suffix(maximumLength))
     }
 }
 

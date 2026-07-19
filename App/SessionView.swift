@@ -52,7 +52,7 @@ struct SessionView: View {
             case .timeline:
                 SessionTimelineView(
                     events: events,
-                    streamedOutput: model.rawOutputText,
+                    streamedOutput: model.activityOutputTail,
                     isStreaming: !session.state.isTerminal,
                     sessionState: session.state,
                     agentName: agentDisplayName,
@@ -100,16 +100,6 @@ struct SessionView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(theme.usesProviderSkin ? .dark : .light, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    composerFocused = false
-                    DeckHaptics.light()
-                }
-                .fontWeight(.semibold)
-            }
-        }
         .task(id: state.eventRevision) {
             await reloadTimeline()
         }
@@ -241,6 +231,22 @@ struct SessionView: View {
                     .foregroundStyle(theme.workspaceText)
                     .colorScheme(theme.usesProviderSkin ? .dark : .light)
                     .focused($composerFocused)
+                    .submitLabel(.send)
+                    .onSubmit(sendComposerMessage)
+                if composerFocused {
+                    Button {
+                        composerFocused = false
+                        DeckHaptics.light()
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(theme.workspaceText.opacity(0.72))
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide keyboard")
+                    .transition(.opacity.combined(with: .scale(scale: 0.88)))
+                }
                 Button {
                     sendComposerMessage()
                 } label: {
