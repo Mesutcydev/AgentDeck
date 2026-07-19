@@ -113,6 +113,16 @@ actor IOSRemoteConnectionService {
         configuration: PairingClientEngine.Configuration
     ) async {
         await stop(deviceID: deviceID)
+        // Adoption is also the authoritative reconnect seed. Pairing may
+        // finish before the app-start reconnect task has initialized this
+        // context, especially immediately after onboarding.
+        reconnectContext = configuration
+        hasReconnectablePeers = true
+        status.suspended = false
+        status.circuitOpen = false
+        status.consecutiveFailures = 0
+        reconnectTask?.cancel()
+        reconnectTask = nil
         connections[deviceID] = connection
         status.connectedDeviceIDs.insert(deviceID)
         status.lastError = nil

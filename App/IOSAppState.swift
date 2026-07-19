@@ -996,6 +996,16 @@ final class IOSAppState {
                         privateKey: privateKey,
                         displayName: "iPhone"
                     )
+                    // Pairing can deliver the initial agent snapshot as soon
+                    // as the handshake completes. Select the authenticated
+                    // host before adoption so the read loop does not discard
+                    // that first snapshot as belonging to a non-active Mac.
+                    activeHostID = deviceID
+                    UserDefaults.standard.set(
+                        deviceID.wireString,
+                        forKey: Self.activeHostDefaultsKey
+                    )
+                    await remoteConnections.setActiveDeviceID(deviceID)
                     await remoteConnections.adopt(
                         connection: connection,
                         deviceID: deviceID,
@@ -1017,6 +1027,7 @@ final class IOSAppState {
                 }
                 setError(nil, domain: .pairing)
                 await refreshDevices()
+                await remoteConnections.setActiveDeviceID(deviceID)
                 await refreshFromRemoteConnection()
             case .rejected(let reason):
                 setError("Pairing rejected by the Mac: \(reason.rawValue).", domain: .pairing)
