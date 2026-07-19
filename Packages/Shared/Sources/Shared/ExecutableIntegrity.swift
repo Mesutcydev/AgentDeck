@@ -38,6 +38,21 @@ public enum ExecutableIntegrityError: Error, Equatable {
     case teamMismatch(path: String, expected: String?, actual: String?)
 }
 
+extension ExecutableIntegrityError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .unreadable:
+            "The provider executable cannot be read. Reinstall it or refresh Agents in Companion."
+        case .baselineMissing:
+            "The provider has not been verified by Companion yet. Refresh Agents, then retry."
+        case .fingerprintMismatch:
+            "The provider executable changed after verification. Refresh Agents before launching it."
+        case .teamMismatch:
+            "The provider signing identity changed after verification. Refresh Agents before launching it."
+        }
+    }
+}
+
 public enum ExecutableIntegrity {
     /// Streams the executable through SHA-256 and reads its code-signing
     /// team identifier (nil when unsigned).

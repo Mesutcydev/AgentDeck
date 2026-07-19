@@ -541,21 +541,66 @@ public actor PairingServerEngine {
                     try await replayEvents(for: request, rawPayload: frame.frame.payload, over: connection)
                 case .sessionPrompt:
                     let request = try SessionPromptRequest(jsonValue: frame.frame.payload)
-                    try await sessionOrchestrator?.sendPrompt(request.prompt, sessionID: request.sessionID)
+                    do {
+                        guard let sessionOrchestrator else {
+                            throw PairingError.protocolViolation("session service unavailable")
+                        }
+                        try await sessionOrchestrator.sendPrompt(request.prompt, sessionID: request.sessionID)
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: request.sessionID,
+                            over: connection
+                        )
+                    }
                 case .sessionStart:
                     let request = try SessionStartRequest(jsonValue: frame.frame.payload)
-                    try await handleSessionStart(request)
+                    do {
+                        try await handleSessionStart(request)
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            projectID: request.projectID,
+                            over: connection
+                        )
+                    }
                 case .approvalResolve:
                     let request = try ApprovalResolveRequest(jsonValue: frame.frame.payload)
-                    _ = try await sessionOrchestrator?.resolveApproval(
-                        requestID: request.requestID,
-                        decision: request.decision,
-                        sessionID: request.sessionID,
-                        usedSecureConfirmation: request.usedSecureConfirmation
-                    )
+                    do {
+                        guard let sessionOrchestrator else {
+                            throw PairingError.protocolViolation("approval service unavailable")
+                        }
+                        _ = try await sessionOrchestrator.resolveApproval(
+                            requestID: request.requestID,
+                            decision: request.decision,
+                            sessionID: request.sessionID,
+                            usedSecureConfirmation: request.usedSecureConfirmation
+                        )
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: request.sessionID,
+                            over: connection
+                        )
+                    }
                 case .sessionInterrupt:
                     let request = try SessionInterruptRequest(jsonValue: frame.frame.payload)
-                    try await sessionOrchestrator?.interrupt(sessionID: request.sessionID)
+                    do {
+                        guard let sessionOrchestrator else {
+                            throw PairingError.protocolViolation("session service unavailable")
+                        }
+                        try await sessionOrchestrator.interrupt(sessionID: request.sessionID)
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: request.sessionID,
+                            over: connection
+                        )
+                    }
                 case .devicePushToken:
                     let request = try DevicePushTokenRequest(jsonValue: frame.frame.payload)
                     // §20 IDOR fix: the push token is written for the
@@ -570,24 +615,57 @@ public actor PairingServerEngine {
                     try await repository.updateDevicePushToken(peerID, token: request.destinationToken)
                 case .terminalStart:
                     let request = try TerminalStartRequest(jsonValue: frame.frame.payload)
-                    guard let handler = configuration.terminalStartHandler else {
-                        throw PairingError.protocolViolation("terminal sessions unavailable on this companion")
-                    }
-                    let newSessionID = try await handler(request)
-                    try await connection.send(
-                        type: .terminalStarted,
-                        payload: TerminalStartedResponse(
-                            sessionID: newSessionID,
+                    do {
+                        guard let handler = configuration.terminalStartHandler else {
+                            throw PairingError.protocolViolation("terminal sessions unavailable on this companion")
+                        }
+                        let newSessionID = try await handler(request)
+                        try await connection.send(
+                            type: .terminalStarted,
+                            payload: TerminalStartedResponse(
+                                sessionID: newSessionID,
+                                projectID: request.projectID,
+                                agentID: request.agentID
+                            ).toJSONValue()
+                        )
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
                             projectID: request.projectID,
-                            agentID: request.agentID
-                        ).toJSONValue()
-                    )
+                            over: connection
+                        )
+                    }
                 case .terminalInput:
                     let input = try TerminalStreamBridge.parseInput(frame.frame.payload)
-                    try await configuration.terminalInputHandler?(input.sessionID, input.data)
+                    do {
+                        guard let handler = configuration.terminalInputHandler else {
+                            throw PairingError.protocolViolation("terminal input unavailable")
+                        }
+                        try await handler(input.sessionID, input.data)
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: input.sessionID,
+                            over: connection
+                        )
+                    }
                 case .terminalResize:
                     let request = try TerminalResizeRequest(jsonValue: frame.frame.payload)
-                    try await configuration.terminalResizeHandler?(request.sessionID, request.cols, request.rows)
+                    do {
+                        guard let handler = configuration.terminalResizeHandler else {
+                            throw PairingError.protocolViolation("terminal resize unavailable")
+                        }
+                        try await handler(request.sessionID, request.cols, request.rows)
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: request.sessionID,
+                            over: connection
+                        )
+                    }
                 case .terminalAttach:
                     let request = try TerminalAttachRequest(jsonValue: frame.frame.payload)
                     if let scrollback = await configuration.terminalScrollbackProvider?(request.sessionID) {
@@ -609,11 +687,20 @@ public actor PairingServerEngine {
                     )
                 case .diffRequest:
                     let request = try DiffRequest(jsonValue: frame.frame.payload)
-                    guard let provider = configuration.diffProvider else {
-                        throw PairingError.protocolViolation("diff mirroring unavailable on this companion")
-                    }
-                    if let content = try await provider(request.sessionID, request.maxBytes) {
-                        try await connection.send(type: .diffContent, payload: content.toJSONValue())
+                    do {
+                        guard let provider = configuration.diffProvider else {
+                            throw PairingError.protocolViolation("diff mirroring unavailable on this companion")
+                        }
+                        if let content = try await provider(request.sessionID, request.maxBytes) {
+                            try await connection.send(type: .diffContent, payload: content.toJSONValue())
+                        }
+                    } catch {
+                        try await reportCommandError(
+                            error,
+                            operation: frame.frame.type.rawValue,
+                            sessionID: request.sessionID,
+                            over: connection
+                        )
                     }
                 case .heartbeat:
                     continue
@@ -627,6 +714,31 @@ public actor PairingServerEngine {
         }
         liveConnections[peerID] = nil
         await connection.close()
+    }
+
+    /// Valid commands can fail for ordinary product reasons (stale session,
+    /// missing provider, unauthorized project). Report those failures on the
+    /// existing channel instead of treating them as transport corruption.
+    private func reportCommandError(
+        _ error: Error,
+        operation: String,
+        sessionID: SessionID? = nil,
+        projectID: ProjectID? = nil,
+        over connection: PeerConnection
+    ) async throws {
+        let message = Redactor.redact(error.localizedDescription)
+        Log.logger(.session).notice(
+            "remote command \(operation, privacy: .public) failed: \(message, privacy: .public)"
+        )
+        try await connection.send(
+            type: .commandError,
+            payload: RemoteCommandError(
+                operation: operation,
+                message: message,
+                sessionID: sessionID,
+                projectID: projectID
+            ).toJSONValue()
+        )
     }
 
     /// §29 Phase 6 `session.start`: routes through the same orchestrator

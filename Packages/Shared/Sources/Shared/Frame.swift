@@ -65,6 +65,10 @@ public enum FrameType: String, Sendable, CaseIterable {
     /// Diff mirroring (payloads: DiffRequest / DiffContent).
     case diffRequest = "diff.request"
     case diffContent = "diff.content"
+    /// A command was understood but could not be completed. This is an
+    /// application-level response and must never tear down the secure peer
+    /// connection (for example, an expired session or unavailable provider).
+    case commandError = "command.error"
 }
 
 extension FrameType: JSONValueConvertible {

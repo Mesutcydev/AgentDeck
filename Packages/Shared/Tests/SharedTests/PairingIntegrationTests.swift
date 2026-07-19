@@ -1034,19 +1034,30 @@ struct SessionServingIntegrationTests {
         #expect(record.projectID == project.id)
         #expect(record.agent == agentID)
 
-        // Unauthorized path: an unknown projectID is rejected — fail-closed,
-        // like every other malformed session request on this channel.
+        // Unauthorized path: a valid command that cannot be completed is
+        // rejected without taking down the secure transport.
+        let unknownProjectID = ProjectID.random()
         try await client.connection.send(
             type: .sessionStart,
             payload: SessionStartRequest(
-                projectID: .random(),
+                projectID: unknownProjectID,
                 agentID: agentID,
                 prompt: PromptInput(text: "touch /etc/passwd")
             ).toJSONValue()
         )
-        await #expect(throws: (any Error).self) {
-            _ = try await nextFrame(from: client.connection, timeout: 5_000)
-        }
+        let rejected = try await nextFrame(from: client.connection, timeout: 5_000)
+        #expect(rejected.frame.type == .commandError)
+        let commandError = try RemoteCommandError(jsonValue: rejected.frame.payload)
+        #expect(commandError.operation == FrameType.sessionStart.rawValue)
+        #expect(commandError.projectID == unknownProjectID)
+
+        // A subsequent request on the same connection still succeeds.
+        try await client.connection.send(
+            type: .projectList,
+            payload: .object([("payloadV", .int(1))])
+        )
+        let projectList = try await nextFrame(from: client.connection, timeout: 5_000)
+        #expect(projectList.frame.type == .projectListResponse)
         let sessions = try await serverRepo.listSessions()
         #expect(sessions.count == 1, "no session is created for an unauthorized project")
         await server.stop()

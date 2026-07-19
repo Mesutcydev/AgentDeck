@@ -14,7 +14,7 @@ struct HomeView: View {
     @Bindable var state: IOSAppState
     @State private var isPresentingNewSession = false
     @State private var isPresentingNewShell = false
-    @State private var launchingAgentID: AgentIdentifier?
+    @State private var requestedAgentID: AgentIdentifier?
     @State private var duplicateProviderID: AgentIdentifier?
     @State private var path: [SessionID] = []
     @AppStorage("home.agentOrder") private var persistedAgentOrder = ""
@@ -73,7 +73,7 @@ struct HomeView: View {
             .toolbarVisibility(.hidden, for: .navigationBar)
             .refreshable { await refreshAll() }
             .sheet(isPresented: $isPresentingNewSession) {
-                NewSessionSheet(state: state)
+                NewSessionSheet(state: state, initialAgentID: requestedAgentID)
             }
             .sheet(isPresented: $isPresentingNewShell) {
                 NewShellSheet(state: state) { sessionID in
@@ -83,19 +83,21 @@ struct HomeView: View {
                     }
                 }
             }
-            .confirmationDialog(
-                duplicateProviderName.map { "\($0) is already running" } ?? "Agent already running",
+            .sheet(
                 isPresented: Binding(
                     get: { duplicateProviderID != nil },
                     set: { if !$0 { duplicateProviderID = nil } }
-                ),
-                titleVisibility: .visible
+                )
             ) {
-                Button("Resume Current Session") { resumeDuplicateProvider() }
-                Button("Start Another Session") { startDuplicateProvider() }
-                Button("Cancel", role: .cancel) { duplicateProviderID = nil }
-            } message: {
-                Text("Continue the live conversation or deliberately create a separate one.")
+                if let id = duplicateProviderID {
+                    DuplicateProviderSheet(
+                        providerID: id,
+                        providerName: duplicateProviderName ?? "Agent",
+                        resume: resumeDuplicateProvider,
+                        startAnother: startDuplicateProvider,
+                        cancel: { duplicateProviderID = nil }
+                    )
+                }
             }
             .navigationDestination(for: SessionID.self) { sessionID in
                 if let session = state.sessions.first(where: { $0.id == sessionID }) {
@@ -157,13 +159,13 @@ struct HomeView: View {
                         } label: {
                             AgentCardCell(
                                 card: card,
-                                isLaunching: launchingAgentID == card.id
+                                isLaunching: false
                             )
                         }
                         .buttonStyle(.plain)
                         .disabled(
                             !isConnected || !card.isObservedInstalled ||
-                            launchingAgentID != nil || state.projects.isEmpty
+                            state.projects.isEmpty
                         )
                         .draggable(card.id.rawValue)
                         .dropDestination(for: String.self) { items, _ in
@@ -262,6 +264,7 @@ struct HomeView: View {
     private var quickActions: some View {
         HStack(spacing: DeckSpace.s) {
             Button {
+                requestedAgentID = nil
                 isPresentingNewSession = true
             } label: {
                 Label("Start Agent", systemImage: "sparkles")
@@ -295,16 +298,16 @@ struct HomeView: View {
         await state.refreshApprovalState()
     }
 
-    /// Provider cards are launch controls, not decoration. A tap starts the
-    /// discovered CLI in the first authorized project and opens its live PTY.
+    /// Provider cards open the structured-session composer. Raw PTY launch is
+    /// kept behind the explicit New Shell action.
     private func launch(_ card: IOSAppState.AgentCard) {
-        guard card.isObservedInstalled, let project = state.projects.first else { return }
+        guard card.isObservedInstalled, !state.projects.isEmpty else { return }
         if state.activeSessions.contains(where: { $0.agent == card.id }) {
             duplicateProviderID = card.id
             DeckHaptics.light()
             return
         }
-        launchNew(card, project: project)
+        presentStructuredLaunch(card)
     }
 
     private var duplicateProviderName: String? {
@@ -325,22 +328,80 @@ struct HomeView: View {
     private func startDuplicateProvider() {
         guard let id = duplicateProviderID,
               let card = state.agentCards.first(where: { $0.id == id }),
-              let project = state.projects.first else {
+              !state.projects.isEmpty else {
             duplicateProviderID = nil
             return
         }
         duplicateProviderID = nil
-        launchNew(card, project: project)
+        presentStructuredLaunch(card)
     }
 
-    private func launchNew(_ card: IOSAppState.AgentCard, project: ProjectRecord) {
-        launchingAgentID = card.id
+    private func presentStructuredLaunch(_ card: IOSAppState.AgentCard) {
+        requestedAgentID = card.id
         DeckHaptics.send()
-        Task {
-            let sessionID = await state.startTerminal(projectID: project.id, agentID: card.id)
-            launchingAgentID = nil
-            if let sessionID { path = [sessionID] }
+        isPresentingNewSession = true
+    }
+}
+
+private struct DuplicateProviderSheet: View {
+    let providerID: AgentIdentifier
+    let providerName: String
+    let resume: () -> Void
+    let startAnother: () -> Void
+    let cancel: () -> Void
+
+    private var theme: AgentTheme { AgentThemes.theme(for: providerID) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.l) {
+            LaunchSheetHeader(
+                index: "LIVE / 01",
+                title: "\(providerName) is running",
+                detail: "Continue the live conversation, or create a deliberate parallel session.",
+                systemImage: theme.glyph,
+                accent: theme.accent,
+                textColor: theme.workspaceText
+            )
+            HStack(spacing: DeckSpace.m) {
+                ProviderMark(theme: theme, size: 44, isLive: true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(providerName).font(DeckFont.headline)
+                    Text("ACTIVE SESSION").font(DeckFont.monoSmall).foregroundStyle(theme.accent)
+                }
+            }
+            Button(action: resume) {
+                Label("Resume current session", systemImage: "arrow.up.right")
+                    .font(DeckFont.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.terminalBackground)
+            .background(theme.accent)
+            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+
+            Button(action: startAnother) {
+                Label("Start another session", systemImage: "plus")
+                    .font(DeckFont.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.workspaceText)
+            .background(theme.workspaceSurface)
+            .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(theme.workspaceRule) }
+            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+
+            Button("Cancel", action: cancel)
+                .font(DeckFont.footnote.weight(.semibold))
+                .foregroundStyle(theme.workspaceText.opacity(0.58))
+                .frame(maxWidth: .infinity)
         }
+        .padding(DeckSpace.l)
+        .foregroundStyle(theme.workspaceText)
+        .background(theme.workspaceBackground.ignoresSafeArea())
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -492,24 +553,11 @@ private struct LiveStatusDot: View {
 
 private struct HostSwitcherButton: View {
     @Bindable var state: IOSAppState
+    @State private var isPresentingHosts = false
 
     var body: some View {
-        Menu {
-            if state.pairedDevices.isEmpty {
-                Text("No paired Macs")
-            } else {
-                ForEach(state.pairedDevices.filter { !$0.revoked }, id: \.id) { device in
-                    Button {
-                        Task { await state.selectHost(device.id) }
-                    } label: {
-                        Label {
-                            Text(device.displayName)
-                        } icon: {
-                            Image(systemName: device.id == state.activeHostID ? "checkmark.circle.fill" : "desktopcomputer")
-                        }
-                    }
-                }
-            }
+        Button {
+            isPresentingHosts = true
         } label: {
             HStack(spacing: 7) {
                 ZStack {
@@ -548,6 +596,10 @@ private struct HostSwitcherButton: View {
                     .stroke(DeckColor.rule, lineWidth: 0.75)
             }
         }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $isPresentingHosts) {
+            HostPickerSheet(state: state)
+        }
         .accessibilityLabel("Active Mac, \(state.activeHost?.displayName ?? "none selected")")
         .accessibilityHint("Switch the Mac used for new agent sessions")
     }
@@ -555,6 +607,64 @@ private struct HostSwitcherButton: View {
     private var activeIsConnected: Bool {
         guard let id = state.activeHostID else { return false }
         return state.connectedDeviceIDs.contains(id)
+    }
+}
+
+private struct HostPickerSheet: View {
+    @Bindable var state: IOSAppState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DeckSpace.l) {
+                    LaunchSheetHeader(
+                        index: "MAC / 01",
+                        title: "Choose your Mac",
+                        detail: "Agent launches, projects, and sessions follow this endpoint.",
+                        systemImage: "desktopcomputer"
+                    )
+                    ForEach(state.pairedDevices.filter { !$0.revoked }, id: \.id) { device in
+                        Button {
+                            Task {
+                                await state.selectHost(device.id)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack(spacing: DeckSpace.m) {
+                                Image(systemName: "desktopcomputer")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(device.id == state.activeHostID ? DeckColor.accent : .secondary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(device.displayName).font(DeckFont.headline)
+                                    Text(state.connectedDeviceIDs.contains(device.id) ? "ONLINE" : "OFFLINE")
+                                        .font(DeckFont.monoSmall.weight(.semibold))
+                                        .foregroundStyle(state.connectedDeviceIDs.contains(device.id) ? DeckColor.activity : .secondary)
+                                }
+                                Spacer()
+                                if device.id == state.activeHostID {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(DeckColor.accent)
+                                } else {
+                                    Image(systemName: "arrow.right").foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(DeckSpace.m)
+                            .background(DeckColor.surface)
+                            .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(DeckColor.rule) }
+                            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(DeckSpace.l)
+            }
+            .background { DeckCanvas() }
+            .navigationTitle("Macs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -682,58 +792,90 @@ private struct NewShellSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if state.projects.isEmpty {
-                    ContentUnavailableView(
-                        "No Projects Synced",
-                        systemImage: "folder",
-                        description: Text("Projects authorized on your Mac appear here after sync.")
+            ScrollView {
+                shellContent
+                    .padding(DeckSpace.l)
+            }
+            .background { DeckCanvas() }
+            .navigationTitle("New shell")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { onStarted(nil) }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var shellContent: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.l) {
+                    LaunchSheetHeader(
+                        index: "SHELL / 01",
+                        title: "Open a shell",
+                        detail: "Choose an authorized project. AgentDeck will open one login shell on your selected Mac.",
+                        systemImage: "terminal"
                     )
-                } else {
-                    Section("Open a login shell in a project") {
+
+                    if state.projects.isEmpty {
+                        ContentUnavailableView(
+                            "No projects synced",
+                            systemImage: "folder.badge.questionmark",
+                            description: Text("Authorize a project in Companion, then pull to refresh Home.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 180)
+                    } else {
+                        Text("PROJECT")
+                            .font(DeckFont.monoSmall.weight(.semibold))
+                            .foregroundStyle(DeckColor.accent)
                         ForEach(state.projects, id: \.id) { project in
                             Button {
                                 start(project: project)
                             } label: {
-                                HStack {
+                                HStack(spacing: DeckSpace.m) {
+                                    Image(systemName: "folder.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(DeckColor.accent)
+                                        .frame(width: 42, height: 42)
+                                        .background(DeckColor.accent.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card))
                                     VStack(alignment: .leading, spacing: DeckSpace.xxs) {
                                         Text(project.displayName)
-                                            .font(DeckFont.callout.weight(.semibold))
-                                            .foregroundStyle(.primary)
+                                            .font(DeckFont.headline)
                                         Text(project.branch ?? project.canonicalPath)
                                             .font(DeckFont.footnote)
                                             .foregroundStyle(.secondary)
                                             .lineLimit(1)
+                                            .truncationMode(.middle)
                                     }
                                     Spacer()
                                     if startingProjectID == project.id {
                                         ProgressView()
+                                            .tint(DeckColor.accent)
                                     } else {
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption)
-                                            .foregroundStyle(.tertiary)
+                                        Image(systemName: "arrow.right")
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(DeckColor.accent)
                                     }
                                 }
+                                .padding(DeckSpace.m)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(DeckColor.surface)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: DeckRadius.card)
+                                        .stroke(DeckColor.rule, lineWidth: 1)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
                             }
+                            .buttonStyle(.plain)
                             .disabled(startingProjectID != nil)
                         }
                     }
-                }
-                if let sessionError = state.error(for: .session) {
-                    Section {
-                        Text(sessionError)
-                            .font(DeckFont.caption)
-                            .foregroundStyle(DeckColor.danger)
+
+                    if let sessionError = state.error(for: .session) {
+                        LaunchErrorCard(message: sessionError)
                     }
-                }
-            }
-            .navigationTitle("New Shell")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onStarted(nil) }
-                }
-            }
         }
     }
 
@@ -741,98 +883,43 @@ private struct NewShellSheet: View {
         startingProjectID = project.id
         Task {
             let sessionID = await state.startTerminal(projectID: project.id)
-            if sessionID != nil {
+            if let sessionID {
                 DeckHaptics.send()
+                onStarted(sessionID)
+            } else {
+                startingProjectID = nil
             }
-            onStarted(sessionID)
         }
     }
 }
 
-// MARK: - New Session sheet (§7.2 flow; system form, token actions)
+// MARK: - New Session sheet (§7.2 structured provider flow)
 
 /// Session start flow: project picker (mirrored projects) + agent picker
 /// (mirrored agent state) + prompt, sent as `session.start`.
 private struct NewSessionSheet: View {
     @Bindable var state: IOSAppState
+    let initialAgentID: AgentIdentifier?
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProjectID: ProjectID?
     @State private var selectedAgentID: AgentIdentifier?
     @State private var prompt = ""
     @State private var model = ""
+    @State private var isStarting = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Project") {
-                    if state.projects.isEmpty {
-                        Text("No projects mirrored yet — projects authorized on your Mac appear here after sync.")
-                            .font(DeckFont.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Project", selection: $selectedProjectID) {
-                            ForEach(state.projects, id: \.id) { project in
-                                Text(project.displayName).tag(Optional(project.id))
-                            }
-                        }
-                    }
-                }
-                Section("Agent") {
-                    Picker("Agent", selection: $selectedAgentID) {
-                        ForEach(state.agentCards) { card in
-                            Text(card.displayName).tag(Optional(card.id))
-                        }
-                    }
-                    if let selectedAgentID,
-                       let card = state.agentCards.first(where: { $0.id == selectedAgentID }),
-                       !card.isObservedInstalled {
-                        Label("This agent has not been observed on your Mac — the start request may be rejected.", systemImage: "exclamationmark.triangle")
-                            .font(DeckFont.footnote)
-                            .foregroundStyle(DeckColor.warning)
-                    }
-                }
-                Section("Prompt") {
-                    TextField("What should the agent do?", text: $prompt, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section("Model (optional)") {
-                    TextField("Provider model selector", text: $model)
-                        .font(DeckFont.mono)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                if let sessionError = state.error(for: .session) {
-                    Section {
-                        Text(sessionError)
-                            .font(DeckFont.caption)
-                            .foregroundStyle(DeckColor.danger)
-                    }
-                }
+            ScrollView {
+                sessionContent
+                    .padding(DeckSpace.l)
             }
-            .navigationTitle("New Session")
+            .background { sheetBackground.ignoresSafeArea() }
+            .foregroundStyle(sheetText)
+            .navigationTitle("New session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Start") {
-                        guard let projectID = selectedProjectID,
-                              let agentID = selectedAgentID else { return }
-                        DeckHaptics.send()
-                        Task {
-                            await state.startSession(
-                                projectID: projectID,
-                                agentID: agentID,
-                                prompt: prompt,
-                                model: model
-                            )
-                            if state.error(for: .session) == nil {
-                                dismiss()
-                            }
-                        }
-                    }
-                    .disabled(!canStart)
+                    Button("Close") { dismiss() }
                 }
             }
             .onAppear {
@@ -840,16 +927,310 @@ private struct NewSessionSheet: View {
                     selectedProjectID = state.projects.first?.id
                 }
                 if selectedAgentID == nil {
-                    selectedAgentID = state.agentCards.first(where: { $0.isObservedInstalled })?.id
-                        ?? state.agentCards.first?.id
+                    selectedAgentID = initialAgentID
+                        ?? availableAgents.first?.id
                 }
             }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var sessionContent: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.l) {
+            LaunchSheetHeader(
+                index: "AGENT / 01",
+                title: "Start an agent",
+                detail: "Describe the outcome. AgentDeck will stream the provider as native messages, actions, files, and approvals.",
+                systemImage: selectedTheme.glyph,
+                accent: selectedTheme.accent,
+                textColor: sheetText
+            )
+            projectSelector
+            providerSelector
+            taskEditor
+            modelEditor
+
+            if let sessionError = state.error(for: .session) {
+                LaunchErrorCard(message: sessionError)
+            }
+
+            Button(action: start) {
+                HStack {
+                    if isStarting { ProgressView().tint(selectedTheme.terminalBackground) }
+                    Label(isStarting ? "Starting…" : "Start structured session", systemImage: "arrow.up.right")
+                    Spacer()
+                    Text("GUI").font(.caption2.monospaced().weight(.bold))
+                }
+                .font(DeckFont.callout.weight(.semibold))
+                .padding(.horizontal, DeckSpace.m)
+                .frame(height: 58)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(selectedTheme.terminalBackground)
+            .background(canStart ? selectedTheme.accent : selectedTheme.accent.opacity(0.28))
+            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+            .disabled(!canStart || isStarting)
+        }
+    }
+
+    private var availableAgents: [IOSAppState.AgentCard] {
+        state.agentCards.filter(\.isObservedInstalled)
+    }
+
+    private var selectedTheme: AgentTheme { AgentThemes.theme(for: selectedAgentID) }
+    private var sheetBackground: Color { selectedTheme.workspaceBackground }
+    private var sheetSurface: Color { selectedTheme.workspaceSurface }
+    private var sheetRule: Color { selectedTheme.workspaceRule }
+    private var sheetText: Color { selectedTheme.workspaceText }
+
+    private var projectSelector: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            sectionHeading("PROJECT")
+            ForEach(state.projects, id: \.id) { project in
+                Button {
+                    selectedProjectID = project.id
+                    DeckHaptics.light()
+                } label: {
+                    HStack(spacing: DeckSpace.s) {
+                        Image(systemName: "folder.fill")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(project.displayName).font(DeckFont.callout.weight(.semibold))
+                            Text(project.branch ?? project.canonicalPath)
+                                .font(DeckFont.footnote)
+                                .opacity(0.55)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Image(systemName: selectedProjectID == project.id ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selectedProjectID == project.id ? selectedTheme.accent : sheetText.opacity(0.28))
+                    }
+                    .foregroundStyle(sheetText)
+                    .padding(DeckSpace.m)
+                    .background(sheetSurface)
+                    .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(sheetRule) }
+                    .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isStarting)
+            }
+        }
+    }
+
+    private var providerSelector: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            HStack {
+                sectionHeading("PROVIDER")
+                Spacer()
+                Text(selectedTheme.personality.uppercased())
+                    .font(DeckFont.monoSmall.weight(.semibold))
+                    .foregroundStyle(selectedTheme.accent)
+            }
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DeckSpace.s) {
+                ForEach(availableAgents) { card in
+                    ProviderChoiceCard(
+                        card: card,
+                        isSelected: selectedAgentID == card.id,
+                        foreground: sheetText,
+                        surface: sheetSurface,
+                        rule: sheetRule
+                    ) {
+                        withAnimation(DeckMotion.quick) { selectedAgentID = card.id }
+                        DeckHaptics.light()
+                    }
+                    .disabled(isStarting)
+                }
+            }
+        }
+    }
+
+    private var taskEditor: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            sectionHeading("TASK")
+            ZStack(alignment: .topLeading) {
+                if prompt.isEmpty {
+                    Text("What should the agent accomplish?")
+                        .font(DeckFont.body)
+                        .foregroundStyle(sheetText.opacity(0.38))
+                        .padding(.horizontal, 17)
+                        .padding(.vertical, 16)
+                }
+                TextEditor(text: $prompt)
+                    .font(DeckFont.body)
+                    .scrollContentBackground(.hidden)
+                    .padding(DeckSpace.s)
+                    .frame(minHeight: 132)
+                    .disabled(isStarting)
+                    .foregroundStyle(sheetText)
+                    .colorScheme(selectedTheme.usesProviderSkin ? .dark : .light)
+            }
+            .background(sheetSurface)
+            .overlay(alignment: .leading) { Rectangle().fill(selectedTheme.accent).frame(width: 3) }
+        }
+    }
+
+    private var modelEditor: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            Text("MODEL · OPTIONAL")
+                .font(DeckFont.monoSmall.weight(.semibold))
+                .foregroundStyle(sheetText.opacity(0.55))
+            TextField("Use provider default", text: $model)
+                .font(DeckFont.mono)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, DeckSpace.m)
+                .frame(height: 52)
+                .foregroundStyle(sheetText)
+                .colorScheme(selectedTheme.usesProviderSkin ? .dark : .light)
+                .background(sheetSurface)
+                .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(sheetRule) }
+                .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+                .disabled(isStarting)
+        }
+    }
+
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title)
+            .font(DeckFont.monoSmall.weight(.semibold))
+            .foregroundStyle(selectedTheme.accent)
     }
 
     private var canStart: Bool {
         selectedProjectID != nil
             && selectedAgentID != nil
             && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func start() {
+        guard let projectID = selectedProjectID, let agentID = selectedAgentID else { return }
+        isStarting = true
+        DeckHaptics.send()
+        Task {
+            await state.startSession(
+                projectID: projectID,
+                agentID: agentID,
+                prompt: prompt,
+                model: model
+            )
+            isStarting = false
+            if state.error(for: .session) == nil { dismiss() }
+        }
+    }
+}
+
+private struct ProviderChoiceCard: View {
+    let card: IOSAppState.AgentCard
+    let isSelected: Bool
+    let foreground: Color
+    let surface: Color
+    let rule: Color
+    let select: () -> Void
+
+    private var theme: AgentTheme { AgentThemes.theme(for: card.id) }
+
+    var body: some View {
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: DeckSpace.s) {
+                HStack {
+                    ProviderMark(theme: theme, size: 30)
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? theme.accent : foreground.opacity(0.28))
+                }
+                Text(card.displayName)
+                    .font(DeckFont.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(theme.personality.uppercased())
+                    .font(DeckFont.monoSmall)
+                    .opacity(0.5)
+            }
+            .foregroundStyle(foreground)
+            .padding(DeckSpace.m)
+            .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+            .background(isSelected ? theme.accent.opacity(0.16) : surface)
+            .overlay {
+                RoundedRectangle(cornerRadius: DeckRadius.card)
+                    .stroke(isSelected ? theme.accent : rule, lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct LaunchSheetHeader: View {
+    let index: LocalizedStringKey
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
+    let systemImage: String
+    var accent: Color = DeckColor.accent
+    var textColor: Color = DeckColor.ink
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            HStack {
+                Text(index)
+                    .font(DeckFont.monoSmall.weight(.semibold))
+                    .foregroundStyle(accent)
+                Spacer()
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(accent)
+            }
+            Text(title)
+                .font(DeckFont.display)
+                .tracking(-1)
+                .foregroundStyle(textColor)
+            Text(detail)
+                .font(DeckFont.callout)
+                .foregroundStyle(textColor.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.bottom, DeckSpace.m)
+        .overlay(alignment: .bottom) { Rectangle().fill(textColor.opacity(0.16)).frame(height: 1) }
+    }
+}
+
+private struct LaunchPickerRow: View {
+    let label: LocalizedStringKey
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: DeckSpace.m) {
+            Image(systemName: systemImage)
+                .foregroundStyle(DeckColor.accent)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DeckFont.footnote)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(DeckFont.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DeckColor.accent)
+        }
+        .padding(.horizontal, DeckSpace.m)
+        .frame(minHeight: 64)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct LaunchErrorCard: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(DeckFont.footnote)
+            .foregroundStyle(DeckColor.danger)
+            .padding(DeckSpace.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DeckColor.danger.opacity(0.08))
+            .overlay(alignment: .leading) { Rectangle().fill(DeckColor.danger).frame(width: 3) }
     }
 }

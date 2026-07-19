@@ -50,6 +50,11 @@ enum AppScenePhase: Sendable {
     case background
 }
 
+private struct RemoteCommandFailure: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 /// Routes handled by `agentdeck://` deep links (widget + notifications).
 enum AppDeepLink: Equatable, Sendable {
     case home
@@ -289,6 +294,11 @@ final class IOSAppState {
                 await self?.applyTerminalStarted(response)
             }
         }
+        await remoteConnections.setCommandErrorHandler { [weak self] response in
+            Task { @MainActor [weak self] in
+                self?.applyRemoteCommandError(response)
+            }
+        }
         await remoteConnections.setAttachmentWireHandler { [weak self] response in
             guard let self else { return }
             await self.routeAttachmentResponse(response)
@@ -344,11 +354,18 @@ final class IOSAppState {
         let status = await remoteConnections.currentStatus()
         connectedDeviceIDs = status.connectedDeviceIDs
         connectionCircuitOpen = status.circuitOpen
-        if !status.connectedDeviceIDs.isEmpty {
+        let activeIsConnected = activeHostID.map(status.connectedDeviceIDs.contains) ?? false
+        if activeIsConnected {
             let transport = activeHostTransportLabel
-            remoteConnectionStatus = "\(transport) · \(status.connectedDeviceIDs.count) Mac\(status.connectedDeviceIDs.count == 1 ? "" : "s")"
+            remoteConnectionStatus = "\(transport) · Online"
             recordDebug("connection", remoteConnectionStatus)
             setError(nil, domain: .connection)
+        } else if !status.connectedDeviceIDs.isEmpty {
+            remoteConnectionStatus = "Selected Mac offline"
+            setError(
+                "The selected Mac is offline. Choose an online Mac or retry the connection.",
+                domain: .connection
+            )
         } else if status.circuitOpen {
             remoteConnectionStatus = "Connection paused — reconnect manually"
             setError(
@@ -453,6 +470,7 @@ final class IOSAppState {
         syncedAgents = []
         activeProjectIDs = []
         await remoteConnections.setActiveDeviceID(deviceID)
+        await refreshFromRemoteConnection()
         recordDebug("connection", "Active host · \(activeHost?.displayName ?? deviceID.wireString)")
         DeckHaptics.light()
     }
@@ -737,6 +755,26 @@ final class IOSAppState {
             try? await repository.insertSession(record)
             await refreshSessions()
         }
+    }
+
+    /// Presents provider/session failures as recoverable command results. The
+    /// secure Mac connection remains online and can immediately accept a new
+    /// request.
+    private func applyRemoteCommandError(_ response: RemoteCommandError) {
+        let message = response.message.isEmpty
+            ? "The Companion could not complete this request."
+            : response.message
+        recordDebug("session", "ERROR · \(response.operation): \(message)")
+        if response.operation == FrameType.terminalStart.rawValue,
+           let projectID = response.projectID {
+            failTerminalStart(
+                projectID: projectID,
+                error: RemoteCommandFailure(message: message)
+            )
+        } else {
+            setError(message, domain: .session)
+        }
+        DeckHaptics.warning()
     }
 
     /// Attaches to a live PTY: the companion replays scrollback as isReplay

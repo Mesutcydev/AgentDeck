@@ -31,6 +31,23 @@ public enum AgentSessionOrchestratorError: Error, Equatable {
     case sessionLimitReached(limit: Int)
 }
 
+extension AgentSessionOrchestratorError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .sessionNotFound:
+            "This session is no longer active on the selected Mac. Start a new session to continue."
+        case .adapterNotRegistered:
+            "This provider is not available in Companion. Refresh Agents and try again."
+        case .projectNotAuthorized:
+            "This project is no longer authorized on the selected Mac. Authorize it in Companion and retry."
+        case .externalImportUnsupported:
+            "This provider session cannot be resumed safely. Start it through AgentDeck instead."
+        case .sessionLimitReached(let limit):
+            "The selected Mac already has \(limit) active agent sessions. Finish or stop one, then retry."
+        }
+    }
+}
+
 /// Persists agent events and broadcasts them to live peer connections.
 public actor AgentSessionOrchestrator {
     public typealias BroadcastHandler = @Sendable (AgentEvent) async throws -> Void

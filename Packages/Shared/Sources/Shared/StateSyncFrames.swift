@@ -9,6 +9,65 @@
 
 import Foundation
 
+/// Companion → client failure for a valid command frame. Keeping this on the
+/// existing connection lets the client explain and recover from provider or
+/// session errors without presenting a false offline state.
+public struct RemoteCommandError: Sendable, Equatable, JSONValueConvertible {
+    public static let payloadV: Int64 = 1
+
+    public let operation: String
+    public let message: String
+    public let sessionID: SessionID?
+    public let projectID: ProjectID?
+
+    public init(
+        operation: String,
+        message: String,
+        sessionID: SessionID? = nil,
+        projectID: ProjectID? = nil
+    ) {
+        self.operation = operation
+        self.message = message
+        self.sessionID = sessionID
+        self.projectID = projectID
+    }
+
+    public init(jsonValue: JSONValue) throws {
+        let version = try jsonValue.intField("payloadV")
+        guard version == Self.payloadV else {
+            throw JSONValueDecodingError.unsupportedPayloadVersion(
+                found: version,
+                supported: Self.payloadV
+            )
+        }
+        operation = try jsonValue.stringField("operation")
+        message = try jsonValue.stringField("message")
+        sessionID = try jsonValue.optionalStringField("sessionID").map {
+            guard let value = SessionID($0) else {
+                throw JSONValueDecodingError.invalidValue(field: "sessionID", reason: "not a UUID")
+            }
+            return value
+        }
+        projectID = try jsonValue.optionalStringField("projectID").map {
+            guard let value = ProjectID($0) else {
+                throw JSONValueDecodingError.invalidValue(field: "projectID", reason: "not a UUID")
+            }
+            return value
+        }
+    }
+
+    public func toJSONValue() -> JSONValue {
+        var fields: [(String, JSONValue)] = [
+            ("payloadV", .int(Self.payloadV)),
+            ("operation", .string(operation)),
+            ("message", .string(message))
+        ]
+        if let sessionID { fields.append(("sessionID", .string(sessionID.wireString))) }
+        if let projectID { fields.append(("projectID", .string(projectID.wireString))) }
+        return .object(fields)
+    }
+}
+
 public enum StateSyncPayloadVersion: Int64, Sendable {
     case v1 = 1
 }

@@ -28,6 +28,7 @@ struct SessionView: View {
     @State private var events: [AgentEvent] = []
     @State private var composerText = ""
     @State private var sendCount = 0
+    @State private var isShowingSessionTools = false
     @FocusState private var composerFocused: Bool
     @Namespace private var surfaceNamespace
 
@@ -259,65 +260,98 @@ struct SessionView: View {
     // MARK: - Composer (§7.4 floating glass capsule)
 
     private var composer: some View {
-        HStack(spacing: DeckSpace.xs) {
-            Menu {
-                Button("Open Changes", systemImage: "plusminus") {
-                    surface = .diffs
+        VStack(spacing: 0) {
+            if isShowingSessionTools {
+                HStack(spacing: DeckSpace.xs) {
+                    sessionToolButton("Console", systemImage: "terminal.fill", destination: .terminal)
+                    sessionToolButton("Changes", systemImage: "plusminus", destination: .diffs)
+                    sessionToolButton("Output", systemImage: "text.alignleft", destination: .rawOutput)
                 }
-                Button("Open Console", systemImage: "terminal") {
-                    surface = .terminal
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.workspaceText)
-                    .frame(width: 36, height: 36)
+                .padding(.horizontal, DeckSpace.m)
+                .padding(.vertical, DeckSpace.s)
+                .background(theme.workspaceSurface)
+                .overlay(alignment: .top) { Rectangle().fill(theme.accent).frame(height: 2) }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .accessibilityLabel("Session tools")
 
-            TextField("Message \(agentDisplayName)…", text: $composerText, axis: .vertical)
-                .lineLimit(1...4)
-                .font(DeckFont.body)
-                .foregroundStyle(theme.workspaceText)
-                .colorScheme(theme.usesProviderSkin ? .dark : .light)
-                .focused($composerFocused)
-            if composerFocused {
+            HStack(spacing: DeckSpace.xs) {
                 Button {
-                    composerFocused = false
+                    withAnimation(DeckMotion.quick) { isShowingSessionTools.toggle() }
                     DeckHaptics.light()
                 } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: isShowingSessionTools ? "xmark" : "plus")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(theme.workspaceText)
                         .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Hide Keyboard")
-                .accessibilityHint("Dismisses the keyboard without sending the message")
-                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                .accessibilityLabel(isShowingSessionTools ? "Close session tools" : "Open session tools")
+
+                TextField("Message \(agentDisplayName)…", text: $composerText, axis: .vertical)
+                    .lineLimit(1...4)
+                    .font(DeckFont.body)
+                    .foregroundStyle(theme.workspaceText)
+                    .colorScheme(theme.usesProviderSkin ? .dark : .light)
+                    .focused($composerFocused)
+                if composerFocused {
+                    Button {
+                        composerFocused = false
+                        DeckHaptics.light()
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(theme.workspaceText)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide Keyboard")
+                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                }
+                Button {
+                    sendComposerMessage()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(theme.terminalBackground)
+                        .frame(width: 38, height: 38)
+                        .background(theme.workspaceText)
+                        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.38 : 1)
             }
-            Button {
-                sendComposerMessage()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(theme.terminalBackground)
-                    .frame(width: 38, height: 38)
-                    .background(theme.workspaceText)
-                    .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.38 : 1)
+            .padding(.horizontal, DeckSpace.m)
+            .padding(.vertical, DeckSpace.xs)
         }
-        .padding(.horizontal, DeckSpace.m)
-        .padding(.vertical, DeckSpace.xs)
         .background(theme.workspaceSurface)
         .overlay(alignment: .top) { Rectangle().fill(theme.workspaceRule).frame(height: 0.75) }
         .animation(DeckMotion.quick, value: composerFocused)
         .disabled(session.state.isTerminal)
         .opacity(session.state.isTerminal ? 0.5 : 1)
+    }
+
+    private func sessionToolButton(
+        _ title: String,
+        systemImage: String,
+        destination: SessionSurface
+    ) -> some View {
+        Button {
+            surface = destination
+            withAnimation(DeckMotion.quick) { isShowingSessionTools = false }
+            DeckHaptics.light()
+        } label: {
+            Label(title.uppercased(), systemImage: systemImage)
+                .font(DeckFont.monoSmall.weight(.semibold))
+                .foregroundStyle(surface == destination ? theme.terminalBackground : theme.workspaceText)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(surface == destination ? theme.accent : theme.workspaceText.opacity(0.06))
+                .overlay { RoundedRectangle(cornerRadius: DeckRadius.card).stroke(theme.workspaceRule) }
+                .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func sendComposerMessage() {

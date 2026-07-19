@@ -47,6 +47,7 @@ actor IOSRemoteConnectionService {
     private var stateSyncHandler: (@Sendable (StateSyncMessage) -> Void)?
     private var diffContentHandler: (@Sendable (JSONValue) -> Void)?
     private var terminalStartedHandler: (@Sendable (TerminalStartedResponse) -> Void)?
+    private var commandErrorHandler: (@Sendable (RemoteCommandError) -> Void)?
     private var attachmentWireHandler: (@Sendable (AttachmentWireResponse) async -> Void)?
 
     init(repository: any SessionRepository) {
@@ -88,6 +89,12 @@ actor IOSRemoteConnectionService {
     /// Receives `terminal.started` responses (new shell PTY per project).
     func setTerminalStartedHandler(_ handler: (@Sendable (TerminalStartedResponse) -> Void)?) {
         terminalStartedHandler = handler
+    }
+
+    /// Receives application-level command failures without conflating them
+    /// with connection loss.
+    func setCommandErrorHandler(_ handler: (@Sendable (RemoteCommandError) -> Void)?) {
+        commandErrorHandler = handler
     }
 
     /// Cursors persisted before backgrounding; combined conservatively with
@@ -405,10 +412,21 @@ actor IOSRemoteConnectionService {
     }
 
     private func send(type: FrameType, payload: JSONValue, sessionID: SessionID? = nil) async throws {
-        let targetID = sessionID.flatMap { sessionOwners[$0] } ?? activeDeviceID
-        // Never route through an arbitrary paired Mac. A selected Mac can be
-        // offline while another peer remains connected; falling back made the
-        // Home screen look live and then launched work on the wrong endpoint.
+        let rememberedOwner = sessionID.flatMap { sessionOwners[$0] }
+        let targetID: DeviceID?
+        if let rememberedOwner, connections[rememberedOwner] != nil {
+            targetID = rememberedOwner
+        } else if let activeDeviceID, connections[activeDeviceID] != nil {
+            // A mirrored session can outlive a prior pairing record. Falling
+            // back only to the explicitly selected, currently connected Mac
+            // is deterministic and repairs that stale ownership on success.
+            targetID = activeDeviceID
+            if let sessionID {
+                assignOwner(activeDeviceID, to: sessionID)
+            }
+        } else {
+            targetID = nil
+        }
         guard let targetID, let connection = connections[targetID] else {
             throw IOSRemoteConnectionError.notConnected
         }
@@ -478,6 +496,10 @@ actor IOSRemoteConnectionService {
                         await attachmentWireHandler?(.initResponse(frame.frame.payload))
                     case "attachment.ack":
                         await attachmentWireHandler?(.ack(frame.frame.payload))
+                    case "command.error":
+                        if let response = try? RemoteCommandError(jsonValue: frame.frame.payload) {
+                            commandErrorHandler?(response)
+                        }
                     default:
                         continue
                     }
@@ -567,6 +589,19 @@ enum IOSRemoteConnectionError: Error, Equatable {
     case unsupportedFrame(String)
     /// `terminal.start` was sent but no `terminal.started` arrived in time.
     case terminalStartTimedOut
+}
+
+extension IOSRemoteConnectionError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .notConnected:
+            "The selected Mac is reconnecting. Wait for Online, then try again."
+        case .unsupportedFrame(let name):
+            "This app and Companion do not share support for \(name). Update both and try again."
+        case .terminalStartTimedOut:
+            "The Companion did not answer the shell request. Confirm it is running, then retry."
+        }
+    }
 }
 
 /// Inbound attachment-contract frames routed to the transfer coordinator.

@@ -39,4 +39,19 @@ struct ProviderTerminalLaunchWireTests {
         #expect(decoded == response)
         #expect(decoded.agentID == provider)
     }
+
+    @Test("command failures preserve operation and routing context")
+    func commandErrorRoundTrip() throws {
+        let sessionID = SessionID.random()
+        let projectID = ProjectID.random()
+        let response = RemoteCommandError(
+            operation: FrameType.terminalStart.rawValue,
+            message: "Provider is not installed",
+            sessionID: sessionID,
+            projectID: projectID
+        )
+
+        let decoded = try RemoteCommandError(jsonValue: response.toJSONValue())
+        #expect(decoded == response)
+    }
 }

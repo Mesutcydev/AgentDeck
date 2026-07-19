@@ -19,6 +19,23 @@ public enum PTYSupervisorError: Error, Equatable {
     case launchFailed(String)
 }
 
+extension PTYSupervisorError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .openPTYFailed:
+            "Companion could not create a terminal on this Mac."
+        case .alreadyRunning:
+            "This terminal is already running."
+        case .notRunning:
+            "This terminal has ended. Start a new session to continue."
+        case .sessionLimitReached(let limit):
+            "The selected Mac already has \(limit) terminal sessions. Close one, then retry."
+        case .launchFailed(let message):
+            "The terminal process could not start: \(message)"
+        }
+    }
+}
+
 public struct PTYLaunchRequest: Sendable, Equatable {
     public var sessionID: SessionID
     public var executable: String
