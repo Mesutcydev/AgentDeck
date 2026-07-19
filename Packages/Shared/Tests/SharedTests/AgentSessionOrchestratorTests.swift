@@ -174,7 +174,7 @@ struct AgentSessionOrchestratorTests {
         return await condition()
     }
 
-    @Test("starting a session broadcasts its stateChanged so peers learn the sessionID")
+    @Test("starting an unprompted session broadcasts ready so peers can compose in the GUI")
     func startBroadcastsSessionID() async throws {
         let store = try SQLiteSessionStore.inMemory()
         let collector = BroadcastCollector()
@@ -198,7 +198,7 @@ struct AgentSessionOrchestratorTests {
             return
         }
         #expect(change.from == .starting)
-        #expect(change.to == .thinking)
+        #expect(change.to == .ready)
         #expect(try await store.session(id: sessionID) != nil)
     }
 

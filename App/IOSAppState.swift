@@ -850,14 +850,19 @@ final class IOSAppState {
         }
     }
 
-    /// Starts a new agent session on the paired Mac (`session.start`).
-    func startSession(projectID: ProjectID, agentID: AgentIdentifier, prompt: String, model: String?) async {
+    /// Starts a new structured agent session on the paired Mac and waits for
+    /// its first mirrored event so callers can navigate to a real record.
+    @discardableResult
+    func startSession(
+        projectID: ProjectID,
+        agentID: AgentIdentifier,
+        prompt: String,
+        model: String?
+    ) async -> SessionID? {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            setError("A prompt is required to start a session.", domain: .session)
-            return
-        }
-        guard authorizeNewLaunch() else { return }
+        guard authorizeNewLaunch() else { return nil }
+        let existingIDs = Set(sessions.map(\.id))
+        setError(nil, domain: .session)
         do {
             try await remoteConnections.sendSessionStart(
                 projectID: projectID,
@@ -867,11 +872,25 @@ final class IOSAppState {
             )
             setError(nil, domain: .session)
             recordSuccessfulLaunch()
+            for _ in 0..<100 {
+                await refreshSessions()
+                if let created = sessions.first(where: {
+                    !existingIDs.contains($0.id)
+                        && $0.agent == agentID
+                        && $0.projectID == projectID
+                }) {
+                    return created.id
+                }
+                if error(for: .session) != nil { return nil }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            setError("The provider started but its session did not arrive in time.", domain: .session)
         } catch IOSRemoteConnectionError.unsupportedFrame(let name) {
             setError("This build cannot send \(name) yet — the companion contract is still landing.", domain: .session)
         } catch {
             setError("Session start failed: \(error.localizedDescription)", domain: .session)
         }
+        return nil
     }
 
     var freeLaunchesRemaining: Int {

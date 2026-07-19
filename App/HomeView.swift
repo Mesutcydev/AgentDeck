@@ -271,23 +271,21 @@ struct HomeView: View {
         await state.refreshApprovalState()
     }
 
-    /// A provider row is the launch button: it opens that provider's real CLI
-    /// in the current authorized project without an intermediate composer.
+    /// A provider row is the launch button: it starts that provider's native
+    /// structured adapter without an intermediate composer. The first prompt
+    /// is entered in the session GUI; New Shell remains the explicit PTY path.
     private func launch(_ card: IOSAppState.AgentCard) {
         guard card.isObservedInstalled,
               launchingAgentID == nil,
               let project = state.projects.first else { return }
-        if let running = state.activeSessions.first(where: { $0.agent == card.id }) {
-            path = [running.id]
-            DeckHaptics.light()
-            return
-        }
         launchingAgentID = card.id
         DeckHaptics.send()
         Task {
-            let sessionID = await state.startTerminal(
+            let sessionID = await state.startSession(
                 projectID: project.id,
-                agentID: card.id
+                agentID: card.id,
+                prompt: "",
+                model: nil
             )
             launchingAgentID = nil
             if let sessionID { path = [sessionID] }

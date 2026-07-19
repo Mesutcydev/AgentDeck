@@ -189,7 +189,8 @@ public actor AgentSessionOrchestrator {
         sequenceBySession[sessionID] = 0
         persistedEventsBySession[sessionID] = 0
 
-        try await recordState(sessionID: sessionID, state: .thinking)
+        let initialState: SessionActivityState = configuration.initialPrompt == nil ? .ready : .thinking
+        try await recordState(sessionID: sessionID, state: initialState)
         // Broadcast the start honestly so connected peers learn the new
         // sessionID immediately (the session.start flow depends on it).
         let startedEvent = AgentEvent(
@@ -198,7 +199,7 @@ public actor AgentSessionOrchestrator {
             sequence: try await nextSequence(for: sessionID),
             timestamp: now,
             confidence: .native,
-            payload: .stateChanged(SessionStateChange(from: .starting, to: .thinking))
+            payload: .stateChanged(SessionStateChange(from: .starting, to: initialState))
         )
         try await persistAndBroadcast(startedEvent)
         return sessionID

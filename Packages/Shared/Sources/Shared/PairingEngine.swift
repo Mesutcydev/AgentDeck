@@ -755,12 +755,13 @@ public actor PairingServerEngine {
         guard let project = try await repository.project(id: request.projectID) else {
             throw AgentSessionOrchestratorError.projectNotAuthorized(request.projectID)
         }
+        let trimmedPrompt = request.prompt.text.trimmingCharacters(in: .whitespacesAndNewlines)
         _ = try await orchestrator.startSession(
             agent: request.agentID,
             configuration: AgentLaunchConfiguration(
                 projectID: request.projectID,
                 workingDirectory: project.canonicalPath,
-                initialPrompt: request.prompt,
+                initialPrompt: trimmedPrompt.isEmpty ? nil : request.prompt,
                 model: request.model
             )
         )
