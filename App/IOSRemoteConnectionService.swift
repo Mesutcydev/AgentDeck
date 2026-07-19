@@ -406,9 +406,10 @@ actor IOSRemoteConnectionService {
 
     private func send(type: FrameType, payload: JSONValue, sessionID: SessionID? = nil) async throws {
         let targetID = sessionID.flatMap { sessionOwners[$0] } ?? activeDeviceID
-        let connection = targetID.flatMap { connections[$0] }
-            ?? connections.sorted(by: { $0.key.wireString < $1.key.wireString }).first?.value
-        guard let connection else {
+        // Never route through an arbitrary paired Mac. A selected Mac can be
+        // offline while another peer remains connected; falling back made the
+        // Home screen look live and then launched work on the wrong endpoint.
+        guard let targetID, let connection = connections[targetID] else {
             throw IOSRemoteConnectionError.notConnected
         }
         try await connection.send(type: type, payload: payload)

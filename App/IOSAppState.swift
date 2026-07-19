@@ -1048,8 +1048,20 @@ final class IOSAppState {
     /// Revokes a previously paired Mac.
     func revoke(_ device: DeviceRecord) async {
         do {
+            // Close the authenticated channel first. Updating only the local
+            // record leaves the read loop alive and it can immediately publish
+            // the revoked Mac as connected again.
+            await remoteConnections.stop(deviceID: device.id)
             try await repository.setDeviceRevoked(device.id, revoked: true)
+            if activeHostID == device.id {
+                activeHostID = nil
+                UserDefaults.standard.removeObject(forKey: Self.activeHostDefaultsKey)
+                await remoteConnections.setActiveDeviceID(nil)
+                syncedAgents = []
+                activeProjectIDs = []
+            }
             await refreshDevices()
+            await refreshFromRemoteConnection()
         } catch {
             setError("Revoke failed: \(error.localizedDescription)", domain: .pairing)
         }
@@ -1061,8 +1073,16 @@ final class IOSAppState {
         do {
             await remoteConnections.stop(deviceID: device.id)
             try await repository.deleteDevice(id: device.id)
+            if activeHostID == device.id {
+                activeHostID = nil
+                UserDefaults.standard.removeObject(forKey: Self.activeHostDefaultsKey)
+                await remoteConnections.setActiveDeviceID(nil)
+                syncedAgents = []
+                activeProjectIDs = []
+            }
             setError(nil, domain: .pairing)
             await refreshDevices()
+            await refreshFromRemoteConnection()
         } catch {
             setError("Forget failed: \(error.localizedDescription)", domain: .pairing)
         }
