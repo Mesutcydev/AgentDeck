@@ -22,7 +22,10 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isConnected: Bool {
-        state.remoteConnectionStatus.hasPrefix("Connected")
+        if let activeHostID = state.activeHostID {
+            return state.connectedDeviceIDs.contains(activeHostID)
+        }
+        return !state.connectedDeviceIDs.isEmpty
     }
 
     private var greeting: String {

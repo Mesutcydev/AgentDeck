@@ -66,8 +66,8 @@ struct MenuBarLabelView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        AgentDeckMenuBarGlyph(paused: state.remoteAccessPaused)
-            .frame(width: 19, height: 18)
+        Image(systemName: state.remoteAccessPaused ? "terminal.fill" : "terminal")
+            .symbolRenderingMode(.monochrome)
             .accessibilityLabel(state.remoteAccessPaused ? "AgentDeck paused" : "AgentDeck")
             .task {
                 await state.start()
@@ -87,74 +87,5 @@ struct MenuBarLabelView: View {
                     state.closeImportWindow()
                 }
             }
-    }
-}
-
-/// A menu-bar-specific reduction of the AgentDeck mark. It is deliberately
-/// drawn as a template glyph rather than reusing the full-color app artwork:
-/// macOS can therefore tint it correctly for every menu-bar appearance while
-/// the terminal prompt and broken right rail remain identifiable at 18 points.
-private struct AgentDeckMenuBarGlyph: View {
-    let paused: Bool
-
-    var body: some View {
-        GeometryReader { proxy in
-            let size = min(proxy.size.width, proxy.size.height)
-            let stroke = max(1.35, size * 0.105)
-            ZStack {
-                MenuBarTerminalOutline()
-                    .stroke(.primary, style: .init(lineWidth: stroke, lineCap: .round, lineJoin: .round))
-                MenuBarPrompt()
-                    .stroke(.primary, style: .init(lineWidth: stroke * 0.86, lineCap: .round, lineJoin: .round))
-                if paused {
-                    HStack(spacing: stroke * 0.72) {
-                        Capsule().fill(.primary)
-                        Capsule().fill(.primary)
-                    }
-                    .frame(width: size * 0.31, height: size * 0.30)
-                    .padding(2)
-                    .background(.background, in: Circle())
-                    .offset(x: size * 0.29, y: size * 0.29)
-                }
-            }
-            .frame(width: size, height: size)
-            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-        }
-    }
-}
-
-private struct MenuBarTerminalOutline: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: .init(x: rect.width * 0.61, y: rect.height * 0.13))
-        path.addLine(to: .init(x: rect.width * 0.22, y: rect.height * 0.13))
-        path.addQuadCurve(to: .init(x: rect.width * 0.13, y: rect.height * 0.22), control: .init(x: rect.width * 0.13, y: rect.height * 0.13))
-        path.addLine(to: .init(x: rect.width * 0.13, y: rect.height * 0.78))
-        path.addQuadCurve(to: .init(x: rect.width * 0.22, y: rect.height * 0.87), control: .init(x: rect.width * 0.13, y: rect.height * 0.87))
-        path.addLine(to: .init(x: rect.width * 0.56, y: rect.height * 0.87))
-
-        path.move(to: .init(x: rect.width * 0.72, y: rect.height * 0.13))
-        path.addLine(to: .init(x: rect.width * 0.80, y: rect.height * 0.13))
-        path.addQuadCurve(to: .init(x: rect.width * 0.87, y: rect.height * 0.20), control: .init(x: rect.width * 0.87, y: rect.height * 0.13))
-        path.addLine(to: .init(x: rect.width * 0.87, y: rect.height * 0.29))
-        path.move(to: .init(x: rect.width * 0.87, y: rect.height * 0.42))
-        path.addLine(to: .init(x: rect.width * 0.87, y: rect.height * 0.54))
-        path.move(to: .init(x: rect.width * 0.87, y: rect.height * 0.67))
-        path.addLine(to: .init(x: rect.width * 0.87, y: rect.height * 0.78))
-        path.addQuadCurve(to: .init(x: rect.width * 0.78, y: rect.height * 0.87), control: .init(x: rect.width * 0.87, y: rect.height * 0.87))
-        path.addLine(to: .init(x: rect.width * 0.69, y: rect.height * 0.87))
-        return path
-    }
-}
-
-private struct MenuBarPrompt: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: .init(x: rect.width * 0.34, y: rect.height * 0.38))
-        path.addLine(to: .init(x: rect.width * 0.51, y: rect.height * 0.50))
-        path.addLine(to: .init(x: rect.width * 0.34, y: rect.height * 0.62))
-        path.move(to: .init(x: rect.width * 0.53, y: rect.height * 0.65))
-        path.addLine(to: .init(x: rect.width * 0.66, y: rect.height * 0.65))
-        return path
     }
 }
