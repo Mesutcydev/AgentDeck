@@ -57,15 +57,17 @@ struct SessionView: View {
                     events: events,
                     streamedOutput: "",
                     isStreaming: !session.state.isTerminal,
+                    sessionState: session.state,
                     agentName: agentDisplayName,
                     agentGlyph: theme.glyph,
                     agentTheme: theme,
                     accent: theme.accent,
-                    pendingApproval: nil,
+                    pendingApproval: livePendingApproval,
                     onResolveApproval: { choice, request in
                         resolveApproval(choice, for: request)
                     },
-                    onOpenConsole: { surface = .terminal }
+                    onOpenConsole: { surface = .terminal },
+                    onOpenChanges: { surface = .diffs }
                 )
             case .terminal:
                 terminalSurface
@@ -82,12 +84,12 @@ struct SessionView: View {
                     .padding(.horizontal, DeckSpace.m)
             }
 
-            if let pendingApproval = livePendingApproval {
+            if let pendingApproval = livePendingApproval, surface != .timeline {
                 SessionApprovalDock(request: pendingApproval, theme: theme) { choice in
                     resolveApproval(choice, for: pendingApproval)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
+            } else if livePendingApproval == nil {
                 composer
             }
         }
@@ -100,6 +102,7 @@ struct SessionView: View {
         .toolbarBackground(theme.workspaceBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(theme.usesProviderSkin ? .dark : .light, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .task(id: state.eventRevision) {
             await reloadTimeline()
         }

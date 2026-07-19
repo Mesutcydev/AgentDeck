@@ -15,6 +15,7 @@ struct SessionTimelineView: View {
     let events: [AgentEvent]
     let streamedOutput: String
     let isStreaming: Bool
+    let sessionState: SessionActivityState
     let agentName: String
     let agentGlyph: String
     let agentTheme: AgentTheme
@@ -24,6 +25,7 @@ struct SessionTimelineView: View {
     let pendingApproval: ApprovalRequest?
     let onResolveApproval: (ApprovalChoice, ApprovalRequest) -> Void
     let onOpenConsole: () -> Void
+    let onOpenChanges: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isNearBottom = true
     @State private var isFollowingLive = true
@@ -41,9 +43,20 @@ struct SessionTimelineView: View {
                 ZStack(alignment: .bottomTrailing) {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: DeckSpace.l) {
-                            ForEach(displayedEvents) { event in
-                                TimelineEventRow(
-                                    event: event,
+                            SessionWorkspaceSummary(
+                                state: sessionState,
+                                toolCount: toolCount,
+                                changedFileCount: changedFileCount,
+                                isStreaming: isStreaming,
+                                agentName: agentName,
+                                theme: agentTheme,
+                                onOpenConsole: onOpenConsole,
+                                onOpenChanges: onOpenChanges
+                            )
+
+                            ForEach(displayItems) { item in
+                                TimelineDisplayRow(
+                                    item: item,
                                     agentName: agentName,
                                     agentGlyph: agentGlyph,
                                     agentTheme: agentTheme,
@@ -137,7 +150,7 @@ struct SessionTimelineView: View {
     }
 
     private var displayedEvents: [AgentEvent] {
-        return events.filter { event in
+        events.filter { event in
             switch event.payload {
             case .approvalRequested, .rawOutput:
                 return false
@@ -145,6 +158,55 @@ struct SessionTimelineView: View {
                 return true
             }
         }
+    }
+
+    /// Provider SDKs stream text at different granularities. Codex and ACP
+    /// commonly emit token/chunk deltas, while Claude can emit a complete
+    /// content block. Coalescing adjacent message chunks here gives every
+    /// provider one stable conversation bubble without interpreting PTY text.
+    private var displayItems: [TimelineDisplayItem] {
+        var items: [TimelineDisplayItem] = []
+        for event in displayedEvents {
+            guard case .messageText(let message) = event.payload else {
+                items.append(.event(event))
+                continue
+            }
+            let date = Date(timeIntervalSince1970: Double(event.timestamp) / 1_000)
+            if message.role == .agent,
+               case .message(let id, let role, let text, let firstDate) = items.last,
+               role == .agent {
+                items.removeLast()
+                items.append(.message(id: id, role: role, text: text + message.text, date: firstDate))
+            } else {
+                items.append(.message(
+                    id: event.id.wireString,
+                    role: message.role,
+                    text: message.text,
+                    date: date
+                ))
+            }
+        }
+        return items
+    }
+
+    private var toolCount: Int {
+        displayedEvents.reduce(into: 0) { count, event in
+            switch event.payload {
+            case .toolCallStarted, .commandStarted, .fileSearch, .build, .test:
+                count += 1
+            default:
+                break
+            }
+        }
+    }
+
+    private var changedFileCount: Int {
+        let paths = displayedEvents.compactMap { event -> String? in
+            guard case .fileOperation(let operation) = event.payload,
+                  operation.kind != .read else { return nil }
+            return operation.path
+        }
+        return Set(paths).count
     }
 
     private func scrollToLive(using proxy: ScrollViewProxy) {
@@ -155,6 +217,200 @@ struct SessionTimelineView: View {
                 proxy.scrollTo("timeline-bottom", anchor: .bottom)
             }
         }
+    }
+}
+
+private enum TimelineDisplayItem: Identifiable {
+    case message(id: String, role: MessageRole, text: String, date: Date)
+    case event(AgentEvent)
+
+    var id: String {
+        switch self {
+        case .message(let id, _, _, _): id
+        case .event(let event): event.id.wireString
+        }
+    }
+}
+
+private struct TimelineDisplayRow: View {
+    let item: TimelineDisplayItem
+    let agentName: String
+    let agentGlyph: String
+    let agentTheme: AgentTheme
+    let accent: Color
+
+    var body: some View {
+        switch item {
+        case .message(_, let role, let text, let date):
+            ChatMessageRow(
+                message: MessageText(role: role, text: text),
+                date: date,
+                agentName: agentName,
+                agentGlyph: agentGlyph,
+                agentTheme: agentTheme,
+                accent: accent
+            )
+        case .event(let event):
+            TimelineEventRow(
+                event: event,
+                agentName: agentName,
+                agentGlyph: agentGlyph,
+                agentTheme: agentTheme,
+                accent: accent
+            )
+        }
+    }
+}
+
+private struct SessionWorkspaceSummary: View {
+    let state: SessionActivityState
+    let toolCount: Int
+    let changedFileCount: Int
+    let isStreaming: Bool
+    let agentName: String
+    let theme: AgentTheme
+    let onOpenConsole: () -> Void
+    let onOpenChanges: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            HStack(alignment: .top, spacing: DeckSpace.s) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                        .fill(theme.accent.opacity(0.14))
+                    Image(systemName: stateGlyph)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                }
+                .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: DeckSpace.xxs) {
+                    HStack(spacing: DeckSpace.xs) {
+                        Text(stateTitle)
+                            .font(DeckFont.subhead)
+                            .foregroundStyle(theme.workspaceText)
+                        if isStreaming { DeckTypingIndicator(color: theme.accent) }
+                    }
+                    Text(stateDetail)
+                        .font(DeckFont.footnote)
+                        .foregroundStyle(theme.workspaceText.opacity(0.58))
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 0) {
+                WorkspaceMetric(value: "\(toolCount)", label: "ACTIONS", color: theme.workspaceText)
+                WorkspaceMetric(value: "\(changedFileCount)", label: "FILES", color: theme.workspaceText)
+                WorkspaceMetric(value: state.isTerminal ? "DONE" : "LIVE", label: "SESSION", color: theme.accent)
+            }
+
+            ViewThatFits {
+                HStack(spacing: DeckSpace.xs) { actionButtons }
+                VStack(spacing: DeckSpace.xs) { actionButtons }
+            }
+        }
+        .padding(DeckSpace.s)
+        .background(theme.workspaceSurface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous)
+                .stroke(theme.workspaceRule, lineWidth: 1)
+        }
+        .overlay(alignment: .top) {
+            Rectangle().fill(theme.accent).frame(height: 3)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder private var actionButtons: some View {
+        Button(action: onOpenChanges) {
+            Label("Review Changes", systemImage: "plusminus")
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+        }
+        .buttonStyle(.plain)
+        .font(DeckFont.footnote.weight(.semibold))
+        .foregroundStyle(theme.workspaceBackground)
+        .background(theme.workspaceText)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+
+        Button(action: onOpenConsole) {
+            Label("Open Raw Console", systemImage: "terminal")
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+        }
+        .buttonStyle(.plain)
+        .font(DeckFont.footnote.weight(.semibold))
+        .foregroundStyle(theme.workspaceText)
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(theme.workspaceRule, lineWidth: 1)
+        }
+    }
+
+    private var stateTitle: String {
+        switch state {
+        case .ready: "Ready for your next instruction"
+        case .thinking: "\(agentName) is thinking"
+        case .planning: "Building a plan"
+        case .reading: "Reading the project"
+        case .editing: "Editing files"
+        case .runningCommand: "Running a command"
+        case .runningBuild: "Building the project"
+        case .runningTests: "Running tests"
+        case .waitingForApproval: "Your approval is needed"
+        case .waitingForUser: "Waiting for your answer"
+        case .completed: "Work completed"
+        case .failed: "Session needs attention"
+        case .interrupted: "Session interrupted"
+        case .terminated: "Provider session ended"
+        default: "Starting \(agentName)"
+        }
+    }
+
+    private var stateDetail: String {
+        switch state {
+        case .waitingForApproval: "Review the exact action below before allowing it."
+        case .waitingForUser: "Reply in the message field to continue."
+        case .completed: "The structured activity and file changes remain available."
+        case .failed, .interrupted, .terminated: "Open the raw console for provider diagnostics."
+        default: "Structured activity from the provider appears below in real time."
+        }
+    }
+
+    private var stateGlyph: String {
+        switch state {
+        case .planning: "list.bullet.clipboard.fill"
+        case .reading: "doc.text.magnifyingglass"
+        case .editing: "pencil.and.outline"
+        case .runningCommand: "terminal.fill"
+        case .runningBuild: "hammer.fill"
+        case .runningTests: "checkmark.seal.fill"
+        case .waitingForApproval: "checkmark.shield.fill"
+        case .waitingForUser: "person.crop.circle.badge.questionmark"
+        case .completed: "checkmark.circle.fill"
+        case .failed: "xmark.octagon.fill"
+        case .interrupted, .terminated: "stop.circle.fill"
+        default: "waveform.path.ecg"
+        }
+    }
+}
+
+private struct WorkspaceMetric: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(DeckFont.callout.weight(.semibold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2.monospaced())
+                .foregroundStyle(color.opacity(0.48))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -209,7 +465,7 @@ private struct TimelineEventRow: View {
                 HStack(spacing: DeckSpace.xs) {
                     Text(style.title)
                         .font(DeckFont.monoSmall.weight(.semibold))
-                        .textCase(.uppercase)
+                        .foregroundStyle(style.tint)
                     if event.confidence.requiresUncertaintyIndicator {
                         Text("Uncertain")
                             .font(.caption2)
@@ -228,8 +484,18 @@ private struct TimelineEventRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, DeckSpace.xs)
-        .overlay(alignment: .bottom) { Rectangle().fill(agentTheme.workspaceRule).frame(height: 0.75) }
+        .padding(DeckSpace.s)
+        .background(agentTheme.workspaceSurface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(style.tint)
+                .frame(width: 3)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(agentTheme.workspaceRule, lineWidth: 0.75)
+        }
         .accessibilityElement(children: .combine)
     }
 
