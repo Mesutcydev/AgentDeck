@@ -21,18 +21,19 @@ struct AgentDeckApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                MainTabView(state: appState)
                 if showsSplash {
                     AgentDeckSplashView {
                         withAnimation(.easeOut(duration: 0.28)) { showsSplash = false }
                     }
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
                     .zIndex(10)
-                }
-                if !showsSplash && !onboardingAccepted {
+                } else if !onboardingAccepted {
                     IOSOnboardingView { onboardingAccepted = true }
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .zIndex(9)
+                } else {
+                    MainTabView(state: appState)
+                        .transition(.opacity)
                 }
             }
                 .task {

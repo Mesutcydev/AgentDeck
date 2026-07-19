@@ -113,7 +113,6 @@ struct SettingsTabView: View {
                     }
                     }
                 }
-                }
                 .padding(.horizontal, DeckSpace.m)
                 .padding(.bottom, DeckSpace.xl)
             }

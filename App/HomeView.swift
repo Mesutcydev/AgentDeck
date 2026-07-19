@@ -30,17 +30,19 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DeckSpace.xl) {
                     header
+                    connectedMacHero
+                    quickActions
                     agentGrid
                     activeSessions
-                    quickActions
                     if let sessionError = state.error(for: .session) {
                         Label(sessionError, systemImage: "exclamationmark.triangle.fill")
                             .font(DeckFont.caption)
                             .foregroundStyle(DeckColor.danger)
                     }
                 }
-                .padding(.horizontal, DeckSpace.m)
-                .padding(.vertical, DeckSpace.l)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 48)
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
             }
@@ -142,6 +144,44 @@ struct HomeView: View {
         }
     }
 
+    private var connectedMacHero: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Label("CONNECTED MAC", systemImage: "desktopcomputer")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced)).tracking(0.8)
+                Spacer()
+                HStack(spacing: 6) {
+                    Circle().fill(isConnected ? DeckColor.success : Color.secondary).frame(width: 8, height: 8)
+                    Text(isConnected ? "LIVE" : "OFFLINE")
+                }.font(DeckFont.monoSmall.weight(.bold)).foregroundStyle(isConnected ? DeckColor.success : .secondary)
+            }
+            HStack(spacing: 16) {
+                Image(systemName: "macbook").font(.system(size: 34, weight: .medium)).frame(width: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(state.pairedDevices.first?.displayName ?? "Pair a Mac")
+                        .font(.system(size: 20, weight: .semibold)).lineLimit(1)
+                    Text(state.remoteConnectionStatus).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 20) {
+                heroMetric("SESSIONS", "\(state.activeSessions.count)")
+                heroMetric("AGENTS", "\(state.agentCards.filter(\.isObservedInstalled).count)")
+                heroMetric("PROJECT", state.projects.first?.displayName ?? "—")
+            }
+        }
+        .foregroundStyle(DeckColor.ink).padding(18).frame(minHeight: 154)
+        .deckSurface(accent: isConnected ? DeckColor.success : nil, radius: 16)
+    }
+
+    private func heroMetric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var connectionStatus: some View {
         HStack(spacing: DeckSpace.xs) {
             Circle()
@@ -172,7 +212,7 @@ struct HomeView: View {
     // MARK: - Agent grid (§7.2)
 
     private var agentColumns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 4 : 2
+        let count = horizontalSizeClass == .regular ? 2 : 1
         return Array(repeating: GridItem(.flexible(), spacing: DeckSpace.s), count: count)
     }
 
@@ -318,7 +358,7 @@ struct HomeView: View {
                 Label("Start Agent", systemImage: "sparkles")
                     .font(DeckFont.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: 64)
             }
             .buttonStyle(DeckActionButtonStyle(primary: true))
             .disabled(!isConnected)
@@ -329,7 +369,7 @@ struct HomeView: View {
                 Label("New Shell", systemImage: "terminal")
                     .font(DeckFont.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: 64)
             }
             .buttonStyle(DeckActionButtonStyle())
             .disabled(!isConnected)
