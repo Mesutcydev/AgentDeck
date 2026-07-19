@@ -196,8 +196,13 @@ private struct SettingsLedgerSection<Content: View>: View {
                 .padding(.bottom, DeckSpace.xs)
             content
         }
-        .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
-        .padding(.top, DeckSpace.s)
+        .padding(DeckSpace.s)
+        .background(DeckColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(DeckColor.rule, lineWidth: 0.75)
+        }
     }
 }
 

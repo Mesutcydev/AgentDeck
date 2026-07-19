@@ -79,6 +79,15 @@ struct SessionsListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
+                SessionSummaryStrip(
+                    running: state.sessions.filter(\.isActive).count,
+                    completed: state.sessions.filter { $0.state == .completed }.count,
+                    failed: state.sessions.filter { $0.state.isTerminal && $0.state != .completed }.count
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: DeckSpace.s, trailing: DeckSpace.m))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
                 Picker("Session filter", selection: $filter) {
                     ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
@@ -222,9 +231,15 @@ private struct SessionRow: View {
                 }
             }
         }
-        .padding(.vertical, 5)
-        .frame(minHeight: 58)
-        .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
+        .padding(.horizontal, DeckSpace.s)
+        .padding(.vertical, DeckSpace.xs + 2)
+        .frame(minHeight: 70)
+        .background(DeckColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(DeckColor.rule, lineWidth: 0.75)
+        }
         .accessibilityElement(children: .combine)
     }
 
@@ -234,5 +249,45 @@ private struct SessionRow: View {
 
     private var updatedDate: Date {
         Date(timeIntervalSince1970: Double(session.updatedAt) / 1_000)
+    }
+}
+
+private struct SessionSummaryStrip: View {
+    let running: Int
+    let completed: Int
+    let failed: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SessionSummaryMetric(value: running, label: "Running", tint: DeckColor.activity)
+            SessionSummaryMetric(value: completed, label: "Finished", tint: DeckColor.success)
+            SessionSummaryMetric(value: failed, label: "Failed", tint: DeckColor.danger)
+        }
+        .padding(DeckSpace.s)
+        .background(DeckColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(DeckColor.rule, lineWidth: 0.75)
+        }
+    }
+}
+
+private struct SessionSummaryMetric: View {
+    let value: Int
+    let label: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value, format: .number)
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .foregroundStyle(tint)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(DeckFont.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

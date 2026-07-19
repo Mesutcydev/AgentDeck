@@ -18,7 +18,7 @@
     <key>LSUIElement</key><true/>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 AgentDeck. All rights reserved.</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
-    <key>SUFeedURL</key><string>https://github.com/Mesutcydev/AgentDeck/releases/latest/download/appcast.xml</string>
+    <key>SUFeedURL</key><string>https://mesut.uk/agentdeck-appcast.xml</string>
     <key>SUPublicEDKey</key><string>qlDWsZf/mOiqvlOxxhw+ODkEzBalH6+s+m9nORmtLmk=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUScheduledCheckInterval</key><integer>86400</integer>

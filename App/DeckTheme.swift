@@ -104,6 +104,9 @@ enum DeckColor {
     static let warning = Color.deckAdaptive(light: 0xC66A00, dark: 0xFFD60A)
     static let danger = Color.deckAdaptive(light: 0xD70015, dark: 0xFF453A)
     static let info = Color.deckAdaptive(light: 0x0066CC, dark: 0x64D2FF)
+    /// Electric cyan is reserved for connected, streaming, and other live
+    /// activity. Orange remains the product action color.
+    static let activity = Color.deckAdaptive(light: 0x008FA3, dark: 0x56E6F2)
 
     static let brandGradient = LinearGradient(colors: [accent, accent], startPoint: .leading, endPoint: .trailing)
 }
@@ -162,6 +165,26 @@ struct DeckCanvas: View {
     }
 }
 
+struct DeckTerminalGrid: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            let spacing: CGFloat = 20
+            stride(from: CGFloat.zero, through: size.width, by: spacing).forEach { x in
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            stride(from: CGFloat.zero, through: size.height, by: spacing).forEach { y in
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+            }
+            context.stroke(path, with: .color(DeckColor.rule.opacity(0.42)), lineWidth: 0.5)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
 private struct DeckSurfaceModifier: ViewModifier {
     let accent: Color?
     let radius: CGFloat
@@ -197,6 +220,11 @@ struct DeckActionButtonStyle: ButtonStyle {
         configuration.label
             .foregroundStyle(primary ? DeckColor.canvas : DeckColor.ink)
             .background(primary ? DeckColor.ink : DeckColor.surface)
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                    .stroke(Color.white.opacity(primary ? 0.16 : 0.5), lineWidth: 0.75)
+                    .padding(1)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
                     .stroke(primary ? Color.clear : DeckColor.rule, lineWidth: 1)
@@ -204,6 +232,11 @@ struct DeckActionButtonStyle: ButtonStyle {
             .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .opacity(configuration.isPressed ? 0.8 : 1)
+            .shadow(
+                color: primary ? DeckColor.ink.opacity(configuration.isPressed ? 0.08 : 0.18) : .clear,
+                radius: configuration.isPressed ? 3 : 10,
+                y: configuration.isPressed ? 1 : 5
+            )
             .animation(DeckMotion.quick, value: configuration.isPressed)
     }
 }

@@ -25,12 +25,30 @@ struct HomeView: View {
         state.remoteConnectionStatus.hasPrefix("Connected")
     }
 
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: .now) {
+        case 5..<12: "Good morning"
+        case 12..<18: "Good afternoon"
+        default: "Good evening"
+        }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    header
-                    connectedMacHero
+                    HomeCommandHero(
+                        greeting: greeting,
+                        macName: state.activeHost?.displayName ?? state.pairedDevices.first?.displayName ?? "Pair a Mac",
+                        connectionStatus: state.remoteConnectionStatus,
+                        isConnected: isConnected,
+                        installedAgents: state.agentCards.filter(\.isObservedInstalled).count,
+                        totalSessions: state.sessions.count,
+                        runningSessions: state.activeSessions.count,
+                        projectName: state.projects.first?.displayName ?? "No project",
+                        pendingApprovals: state.pendingApprovalRecords.count
+                    )
+                    HostSwitcherButton(state: state)
                     quickActions
                     agentGrid
                     activeSessions
@@ -94,118 +112,6 @@ struct HomeView: View {
             .task {
                 await state.refreshProjects()
             }
-        }
-    }
-
-    // MARK: - Header (§7.2)
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: DeckSpace.s) {
-                DeckMark(size: 28, color: DeckColor.ink, showsSignal: false)
-                HStack(spacing: 0) {
-                    Text("AGENT").foregroundStyle(DeckColor.ink)
-                    Text("/DECK").foregroundStyle(DeckColor.accent)
-                }
-                .font(.system(size: 29, weight: .black, design: .default))
-                .tracking(-1.4)
-            }
-            HostSwitcherButton(state: state)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DeckSpace.s) {
-                    connectionStatus
-                    pendingApprovalStatus
-                }
-                VStack(alignment: .leading, spacing: DeckSpace.xs) {
-                    connectionStatus
-                    pendingApprovalStatus
-                }
-            }
-            .padding(.vertical, 6)
-            .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
-            .overlay(alignment: .bottom) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
-            if state.connectionCircuitOpen {
-                Button {
-                    DeckHaptics.retry()
-                    Task { await state.retryConnections() }
-                } label: {
-                    Label("Reconnect Now", systemImage: "arrow.clockwise")
-                        .font(DeckFont.callout.weight(.semibold))
-                }
-                .buttonStyle(.glass)
-                .padding(.top, DeckSpace.xxs)
-            }
-            if let connectionError = state.error(for: .connection), !state.connectionCircuitOpen {
-                Text(connectionError)
-                    .font(DeckFont.footnote)
-                    .foregroundStyle(DeckColor.danger)
-            }
-        }
-    }
-
-    private var connectedMacHero: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("CONNECTED MAC", systemImage: "desktopcomputer")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced)).tracking(0.8)
-                Spacer()
-                HStack(spacing: 6) {
-                    Circle().fill(isConnected ? DeckColor.success : Color.secondary).frame(width: 8, height: 8)
-                    Text(isConnected ? "LIVE" : "OFFLINE")
-                }.font(DeckFont.monoSmall.weight(.bold)).foregroundStyle(isConnected ? DeckColor.success : .secondary)
-            }
-            HStack(spacing: 12) {
-                Image(systemName: "macbook").font(.system(size: 27, weight: .medium)).frame(width: 36)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(state.pairedDevices.first?.displayName ?? "Pair a Mac")
-                        .font(.system(size: 20, weight: .semibold)).lineLimit(1)
-                    Text(state.remoteConnectionStatus).font(.system(size: 15)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
-            }
-            HStack(spacing: 20) {
-                heroMetric("SESSIONS", "\(state.activeSessions.count)")
-                heroMetric("AGENTS", "\(state.agentCards.filter(\.isObservedInstalled).count)")
-                heroMetric("PROJECT", state.projects.first?.displayName ?? "—")
-            }
-        }
-        .foregroundStyle(DeckColor.ink).padding(14).frame(minHeight: 136)
-        .deckSurface(accent: isConnected ? DeckColor.success : nil, radius: 16)
-    }
-
-    private func heroMetric(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.caption2.monospaced().weight(.semibold)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var connectionStatus: some View {
-        HStack(spacing: DeckSpace.xs) {
-            Circle()
-                .fill(isConnected ? DeckColor.success : Color(.tertiaryLabel))
-                .frame(width: 8, height: 8)
-            DeckMarqueeText(text: state.remoteConnectionStatus)
-                .frame(maxWidth: .infinity)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private var pendingApprovalStatus: some View {
-        if !state.pendingApprovalRecords.isEmpty {
-            Label(
-                "\(state.pendingApprovalRecords.count) waiting",
-                systemImage: "checkmark.shield.fill"
-            )
-            .font(DeckFont.monoSmall.weight(.semibold))
-            .foregroundStyle(DeckColor.warning)
-            .fixedSize()
-            .accessibilityLabel(
-                "\(state.pendingApprovalRecords.count) approval\(state.pendingApprovalRecords.count == 1 ? "" : "s") waiting"
-            )
         }
     }
 
@@ -431,6 +337,150 @@ struct HomeView: View {
             let sessionID = await state.startTerminal(projectID: project.id, agentID: card.id)
             launchingAgentID = nil
             if let sessionID { path = [sessionID] }
+        }
+    }
+}
+
+private struct HomeCommandHero: View {
+    let greeting: String
+    let macName: String
+    let connectionStatus: String
+    let isConnected: Bool
+    let installedAgents: Int
+    let totalSessions: Int
+    let runningSessions: Int
+    let projectName: String
+    let pendingApprovals: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DeckSpace.m) {
+            HStack(alignment: .center, spacing: DeckSpace.s) {
+                DeckMark(size: 28, color: DeckColor.ink, showsSignal: false)
+                HStack(spacing: 0) {
+                    Text("AGENT").foregroundStyle(DeckColor.ink)
+                    Text("/DECK").foregroundStyle(DeckColor.accent)
+                }
+                .font(.system(size: 29, weight: .black))
+                .tracking(-1.4)
+                Spacer()
+                LiveStatusDot(isLive: isConnected)
+            }
+
+            VStack(alignment: .leading, spacing: DeckSpace.xxs) {
+                Text(greeting)
+                    .font(DeckFont.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Text("Control your agents.")
+                    .font(DeckFont.display)
+                    .tracking(-1.2)
+            }
+
+            HStack(spacing: DeckSpace.s) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(isConnected ? DeckColor.activity : .secondary)
+                    .frame(width: 40, height: 40)
+                    .background(DeckColor.surfaceRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CONNECTED TO")
+                        .font(.caption2.monospaced().weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(macName)
+                        .font(DeckFont.callout.weight(.semibold))
+                        .lineLimit(1)
+                    Text(connectionStatus)
+                        .font(DeckFont.footnote)
+                        .foregroundStyle(isConnected ? DeckColor.activity : .secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if pendingApprovals > 0 {
+                    Label("\(pendingApprovals)", systemImage: "checkmark.shield.fill")
+                        .font(DeckFont.monoSmall.weight(.bold))
+                        .foregroundStyle(DeckColor.warning)
+                }
+            }
+
+            HStack(spacing: 0) {
+                HomeHeroMetric(value: installedAgents, label: "Agents")
+                HomeHeroMetric(value: totalSessions, label: "Sessions")
+                HomeHeroMetric(value: runningSessions, label: "Running", tint: DeckColor.activity)
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CURRENT PROJECT")
+                        .font(.caption2.monospaced().weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(projectName)
+                        .font(DeckFont.callout.weight(.semibold))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, DeckSpace.xs)
+            .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
+        }
+        .padding(DeckSpace.m)
+        .foregroundStyle(DeckColor.ink)
+        .background {
+            ZStack {
+                DeckColor.surface
+                DeckTerminalGrid().opacity(0.32)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous)
+                .stroke(isConnected ? DeckColor.activity.opacity(0.38) : DeckColor.rule, lineWidth: 1)
+        }
+        .shadow(color: isConnected ? DeckColor.activity.opacity(0.1) : .clear, radius: 20, y: 8)
+    }
+}
+
+private struct HomeHeroMetric: View {
+    let value: Int
+    let label: String
+    var tint: Color = DeckColor.ink
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value, format: .number)
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .contentTransition(.numericText())
+                .foregroundStyle(tint)
+            Text(label)
+                .font(DeckFont.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct LiveStatusDot: View {
+    let isLive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulses = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isLive ? DeckColor.activity : Color.secondary)
+                .frame(width: 8, height: 8)
+                .scaleEffect(pulses ? 1.15 : 0.85)
+            Text(isLive ? "ONLINE" : "OFFLINE")
+        }
+        .font(.caption2.monospaced().weight(.bold))
+        .foregroundStyle(isLive ? DeckColor.activity : .secondary)
+        .task {
+            guard isLive, !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                pulses = true
+            }
         }
     }
 }

@@ -194,6 +194,14 @@ private struct ApprovalInboxView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
+                ApprovalInboxSummary(
+                    pending: state.pendingApprovalRecords.count,
+                    rules: state.approvalRules.count
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: DeckSpace.m, bottom: DeckSpace.s, trailing: DeckSpace.m))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
                 if let error = state.error(for: .approval) {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -331,6 +339,44 @@ private struct ApprovalInboxView: View {
             if selectedRequestID == nil {
                 selectedRequestID = state.pendingApprovalRecords.first?.request.id
             }
+        }
+    }
+}
+
+private struct ApprovalInboxSummary: View {
+    let pending: Int
+    let rules: Int
+
+    var body: some View {
+        HStack(spacing: DeckSpace.s) {
+            Image(systemName: pending == 0 ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(pending == 0 ? DeckColor.success : DeckColor.warning)
+                .frame(width: 48, height: 48)
+                .background((pending == 0 ? DeckColor.success : DeckColor.warning).opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(pending == 0 ? "Everything approved" : "\(pending) awaiting review")
+                    .font(DeckFont.subhead)
+                Text(pending == 0 ? "No agent actions need your attention." : "Review each trust boundary before work continues.")
+                    .font(DeckFont.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: DeckSpace.xs)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(rules, format: .number)
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                Text("Rules")
+                    .font(DeckFont.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(DeckSpace.s)
+        .background(DeckColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(DeckColor.rule, lineWidth: 0.75)
         }
     }
 }
