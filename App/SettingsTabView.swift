@@ -171,6 +171,7 @@ private struct DebugConsoleView: View {
         }
         .navigationTitle("Event Console")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Clear") { state.clearDebugEntries() }

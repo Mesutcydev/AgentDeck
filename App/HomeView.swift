@@ -64,10 +64,10 @@ struct HomeView: View {
                 .frame(maxWidth: 680)
                 .frame(maxWidth: .infinity)
             }
+            .safeAreaPadding(.top, DeckSpace.s)
             .background { DeckCanvas() }
             .tint(DeckColor.accent)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .principal) { EmptyView() } }
+            .toolbarVisibility(.hidden, for: .navigationBar)
             .refreshable { await refreshAll() }
             .sheet(isPresented: $isPresentingNewSession) {
                 NewSessionSheet(state: state)

@@ -64,6 +64,8 @@ struct ContentView: View {
                                 device: device,
                                 isActive: device.id == state.activeHostID,
                                 isConnected: state.connectedDeviceIDs.contains(device.id),
+                                activeSessions: device.id == state.activeHostID ? state.activeSessions.count : 0,
+                                installedAgents: device.id == state.activeHostID ? state.agentCards.filter(\.isObservedInstalled).count : 0,
                                 select: { Task { await state.selectHost(device.id) } },
                                 requestRevoke: { devicePendingRevoke = device }
                             )
@@ -234,42 +236,63 @@ private struct DeviceRow: View {
     let device: DeviceRecord
     let isActive: Bool
     let isConnected: Bool
+    let activeSessions: Int
+    let installedAgents: Int
     let select: () -> Void
     let requestRevoke: () -> Void
 
     var body: some View {
-        HStack(spacing: DeckSpace.s) {
-            Image(systemName: "desktopcomputer")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(device.revoked ? Color(.tertiaryLabel) : DeckColor.accent)
-                .frame(width: 24, height: 28)
-            VStack(alignment: .leading, spacing: DeckSpace.xxs) {
-                Text(device.displayName)
-                    .font(DeckFont.callout.weight(.semibold))
-                Text(device.id.wireString)
-                    .font(DeckFont.monoSmall)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if device.revoked {
-                Button("Forget", role: .destructive) { requestRevoke() }
-                    .font(DeckFont.footnote.weight(.medium))
-            } else {
-                VStack(alignment: .trailing, spacing: 4) {
-                    Button(isActive ? "ACTIVE" : "USE MAC") { select() }
-                        .font(DeckFont.monoSmall.weight(.semibold))
-                        .foregroundStyle(isActive ? DeckColor.success : DeckColor.accent)
-                    HStack(spacing: 4) {
-                        Circle().fill(isConnected ? DeckColor.success : Color(.tertiaryLabel)).frame(width: 5, height: 5)
-                        Text(isConnected ? "CONNECTED" : "OFFLINE")
+        VStack(alignment: .leading, spacing: DeckSpace.s) {
+            HStack(spacing: DeckSpace.s) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(device.revoked ? Color(.tertiaryLabel) : DeckColor.activity)
+                    .frame(width: 42, height: 42)
+                    .background(DeckColor.surfaceRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: DeckSpace.xxs) {
+                    Text(device.displayName)
+                        .font(DeckFont.subhead)
+                    Text(device.id.wireString)
+                        .font(DeckFont.monoSmall)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if device.revoked {
+                    Button("Forget", role: .destructive) { requestRevoke() }
+                        .font(DeckFont.footnote.weight(.medium))
+                } else {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Button(isActive ? "ACTIVE" : "USE MAC") { select() }
+                            .font(DeckFont.monoSmall.weight(.semibold))
+                            .foregroundStyle(isActive ? DeckColor.activity : DeckColor.accent)
+                        HStack(spacing: 4) {
+                            Circle().fill(isConnected ? DeckColor.activity : Color(.tertiaryLabel)).frame(width: 5, height: 5)
+                            Text(isConnected ? "CONNECTED" : "OFFLINE")
+                        }
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
                 }
             }
+            if !device.revoked {
+                HStack(spacing: 0) {
+                    MacMetric(value: installedAgents, label: "Agents")
+                    MacMetric(value: activeSessions, label: "Running")
+                    MacMetric(value: isConnected ? 1 : 0, label: "Channel")
+                }
+                .padding(.top, DeckSpace.xs)
+                .overlay(alignment: .top) { Rectangle().fill(DeckColor.rule).frame(height: 0.75) }
+            }
         }
-        .padding(.vertical, DeckSpace.xxs)
+        .padding(DeckSpace.s)
+        .background(DeckColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous)
+                .stroke(isConnected ? DeckColor.activity.opacity(0.35) : DeckColor.rule, lineWidth: 0.75)
+        }
         .accessibilityElement(children: .combine)
         .contextMenu {
             if !device.revoked && !isActive {
@@ -277,6 +300,22 @@ private struct DeviceRow: View {
             }
             Button(device.revoked ? "Forget" : "Revoke", systemImage: device.revoked ? "trash" : "xmark.shield", role: .destructive) { requestRevoke() }
         }
+    }
+}
+
+private struct MacMetric: View {
+    let value: Int
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value, format: .number)
+                .font(.system(.headline, design: .rounded, weight: .bold))
+            Text(label)
+                .font(DeckFont.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

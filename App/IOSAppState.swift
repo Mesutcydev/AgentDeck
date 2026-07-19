@@ -186,7 +186,13 @@ final class IOSAppState {
     }
 
     func recordDebug(_ category: String, _ message: String) {
-        debugEntries.append(DebugEntry(timestamp: Date(), category: category.uppercased(), message: message))
+        let normalizedCategory = category.uppercased()
+        if let latest = debugEntries.last,
+           latest.category == normalizedCategory,
+           latest.message == message {
+            return
+        }
+        debugEntries.append(DebugEntry(timestamp: Date(), category: normalizedCategory, message: message))
         if debugEntries.count > 250 {
             debugEntries.removeFirst(debugEntries.count - 250)
         }
