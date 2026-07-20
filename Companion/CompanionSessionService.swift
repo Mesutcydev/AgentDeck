@@ -27,6 +27,33 @@ final class CompanionSessionService {
     private(set) var boundPort: UInt16?
     private(set) var lastError: String?
 
+    /// Finder-launched apps do not inherit values exported by the user's
+    /// login shell. Resolve Claude's documented environment once, then pass
+    /// only Claude's allowlisted prefixes to its adapter. The complete shell
+    /// environment is never retained or logged.
+    private static let claudeLoginShellEnvironment: [String: String] = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let bootstrapEnvironment = [
+            "HOME": home,
+            "USER": NSUserName(),
+            "LOGNAME": NSUserName(),
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        ]
+        guard let output = try? BoundedProcessRunner.run(
+            executable: "/bin/zsh",
+            arguments: ["-lic", "/usr/bin/env -0"],
+            timeoutSeconds: 5,
+            environment: bootstrapEnvironment
+        ) else {
+            return [:]
+        }
+        let shellEnvironment = AgentEnvironment.parseNullSeparatedEnvironment(output)
+        return AgentEnvironment.sanitizedForAgent(
+            base: shellEnvironment,
+            additionalPrefixes: ["ANTHROPIC_", "CLAUDE_CODE_"]
+        )
+    }()
+
     init(
         repository: any SessionRepository,
         identityStore: KeychainIdentityStore = KeychainIdentityStore(service: "\(ProductNaming.logSubsystem).companion.identity"),
@@ -536,7 +563,11 @@ final class CompanionSessionService {
             case "com.openai.codex":
                 CodexAdapter(identifier: agent.id, executablePath: path)
             case "com.anthropic.claude-code":
-                ClaudeAdapter(identifier: agent.id, executablePath: path)
+                ClaudeAdapter(
+                    identifier: agent.id,
+                    executablePath: path,
+                    environmentOverrides: Self.claudeLoginShellEnvironment
+                )
             case "com.moonshot.kimi":
                 ACPAgentAdapter.kimi(executablePath: path)
             case "com.anomaly.opencode":

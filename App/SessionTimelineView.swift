@@ -31,122 +31,134 @@ struct SessionTimelineView: View {
     @State private var isFollowingLive = true
 
     var body: some View {
-        if displayedEvents.isEmpty && streamedOutput.isEmpty {
-            ContentUnavailableView(
-                "No Activity Yet",
-                systemImage: "text.bubble",
-                description: Text("Messages, commands, edits, and approvals will appear here as the agent works.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollViewReader { proxy in
-                ZStack(alignment: .bottomTrailing) {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: DeckSpace.l) {
-                            SessionWorkspaceSummary(
+        ScrollViewReader { proxy in
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: DeckSpace.l) {
+                        SessionWorkspaceSummary(
+                            state: sessionState,
+                            toolCount: toolCount,
+                            changedFileCount: changedFileCount,
+                            isStreaming: isStreaming,
+                            agentName: agentName,
+                            theme: agentTheme,
+                            onOpenConsole: onOpenConsole,
+                            onOpenChanges: onOpenChanges
+                        )
+
+                        if displayItems.isEmpty && visibleStreamedOutput.isEmpty && pendingApproval == nil {
+                            SessionEmptyActivityView(
+                                agentName: agentName,
                                 state: sessionState,
-                                toolCount: toolCount,
-                                changedFileCount: changedFileCount,
+                                theme: agentTheme,
+                                onOpenConsole: onOpenConsole
+                            )
+                        }
+
+                        ForEach(displayItems) { item in
+                            TimelineDisplayRow(
+                                item: item,
+                                agentName: agentName,
+                                agentGlyph: agentGlyph,
+                                agentTheme: agentTheme,
+                                accent: accent
+                            )
+                        }
+
+                        if !visibleStreamedOutput.isEmpty {
+                            LiveAgentResponseView(
+                                text: visibleStreamedOutput,
                                 isStreaming: isStreaming,
                                 agentName: agentName,
-                                theme: agentTheme,
-                                onOpenConsole: onOpenConsole,
-                                onOpenChanges: onOpenChanges
+                                agentGlyph: agentGlyph,
+                                agentTheme: agentTheme,
+                                accent: accent,
+                                onOpenConsole: onOpenConsole
                             )
-
-                            ForEach(displayItems) { item in
-                                TimelineDisplayRow(
-                                    item: item,
-                                    agentName: agentName,
-                                    agentGlyph: agentGlyph,
-                                    agentTheme: agentTheme,
-                                    accent: accent
-                                )
-                            }
-
-                            if !streamedOutput.isEmpty {
-                                LiveAgentResponseView(
-                                    text: streamedOutput,
-                                    isStreaming: isStreaming,
-                                    agentName: agentName,
-                                    agentGlyph: agentGlyph,
-                                    agentTheme: agentTheme,
-                                    accent: accent,
-                                    onOpenConsole: onOpenConsole
-                                )
-                                .id("live-stream")
-                            }
-
-                            if let pendingApproval {
-                                ChatApprovalCard(
-                                    request: pendingApproval,
-                                    onResolve: { choice in
-                                        onResolveApproval(choice, pendingApproval)
-                                    }
-                                )
-                                .id("pending-approval")
-                            }
-
-                            Color.clear
-                                .frame(height: 1)
-                                .id("timeline-bottom")
+                            .id("live-stream")
                         }
-                        .padding(.horizontal, DeckSpace.m)
-                        .padding(.top, DeckSpace.l)
-                        .padding(.bottom, DeckSpace.xl)
+
+                        if let pendingApproval {
+                            ChatApprovalCard(
+                                request: pendingApproval,
+                                onResolve: { choice in
+                                    onResolveApproval(choice, pendingApproval)
+                                }
+                            )
+                            .id("pending-approval")
+                        }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("timeline-bottom")
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onScrollGeometryChange(for: Bool.self) { geometry in
-                        let distanceFromBottom = geometry.contentSize.height
-                            - geometry.containerSize.height
-                            - geometry.contentOffset.y
-                        return distanceFromBottom < 240
-                    } action: { _, nearBottom in
-                        isNearBottom = nearBottom
-                        if nearBottom {
-                            isFollowingLive = true
-                        }
-                    }
-                    .onScrollPhaseChange { _, newPhase in
-                        if newPhase == .interacting {
-                            isFollowingLive = false
-                        }
-                    }
-
-                    if !isFollowingLive {
-                        Button {
-                            isFollowingLive = true
-                            isNearBottom = true
-                            scrollToLive(using: proxy)
-                        } label: {
-                            HStack(spacing: DeckSpace.xs) {
-                                Circle()
-                                    .fill(isStreaming ? accent : agentTheme.workspaceText.opacity(0.4))
-                                    .frame(width: 6, height: 6)
-                                Text("JUMP TO LIVE")
-                                Image(systemName: "arrow.down")
-                            }
-                            .font(.caption2.monospaced().weight(.semibold))
-                            .padding(.horizontal, DeckSpace.s)
-                            .frame(height: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(agentTheme.workspaceBackground)
-                        .background(agentTheme.workspaceText)
-                        .overlay { Rectangle().stroke(agentTheme.workspaceRule, lineWidth: 1) }
-                        .padding(DeckSpace.m)
+                    .padding(.horizontal, DeckSpace.m)
+                    .padding(.top, DeckSpace.l)
+                    .padding(.bottom, DeckSpace.xl)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    let distanceFromBottom = geometry.contentSize.height
+                        - geometry.containerSize.height
+                        - geometry.contentOffset.y
+                    return distanceFromBottom < 240
+                } action: { _, nearBottom in
+                    isNearBottom = nearBottom
+                    if nearBottom {
+                        isFollowingLive = true
                     }
                 }
-                .onChange(of: streamedOutput.count) {
-                    guard isFollowingLive else { return }
-                    scrollToLive(using: proxy)
+                .onScrollPhaseChange { _, newPhase in
+                    if newPhase == .interacting {
+                        isFollowingLive = false
+                    }
                 }
-                .onChange(of: events.count) {
-                    guard isFollowingLive else { return }
-                    scrollToLive(using: proxy)
+
+                if !isFollowingLive {
+                    Button {
+                        isFollowingLive = true
+                        isNearBottom = true
+                        scrollToLive(using: proxy)
+                    } label: {
+                        HStack(spacing: DeckSpace.xs) {
+                            Circle()
+                                .fill(isStreaming ? accent : agentTheme.workspaceText.opacity(0.4))
+                                .frame(width: 6, height: 6)
+                            Text("JUMP TO LIVE")
+                            Image(systemName: "arrow.down")
+                        }
+                        .font(.caption2.monospaced().weight(.semibold))
+                        .padding(.horizontal, DeckSpace.s)
+                        .frame(height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(agentTheme.workspaceBackground)
+                    .background(agentTheme.workspaceText)
+                    .overlay { Rectangle().stroke(agentTheme.workspaceRule, lineWidth: 1) }
+                    .padding(DeckSpace.m)
                 }
             }
+            .onChange(of: visibleStreamedOutput.count) {
+                guard isFollowingLive else { return }
+                scrollToLive(using: proxy)
+            }
+            .onChange(of: events.count) {
+                guard isFollowingLive else { return }
+                scrollToLive(using: proxy)
+            }
         }
+    }
+
+    /// Raw PTY output is a last-resort fallback. Once a provider emits
+    /// structured events, Activity stays a native conversation and leaves
+    /// terminal control sequences in Console where they belong.
+    private var visibleStreamedOutput: String {
+        guard displayedEvents.isEmpty else { return "" }
+        let text = streamedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty,
+              !text.contains("[?"),
+              !text.contains("]0;") else { return "" }
+        return text
     }
 
     private var displayedEvents: [AgentEvent] {
@@ -229,6 +241,49 @@ private enum TimelineDisplayItem: Identifiable {
         case .message(let id, _, _, _): id
         case .event(let event): event.id.wireString
         }
+    }
+}
+
+private struct SessionEmptyActivityView: View {
+    let agentName: String
+    let state: SessionActivityState
+    let theme: AgentTheme
+    let onOpenConsole: () -> Void
+
+    var body: some View {
+        VStack(spacing: DeckSpace.s) {
+            ProviderMark(theme: theme, size: 38, isLive: !state.isTerminal)
+            Text(title)
+                .font(DeckFont.subhead)
+                .foregroundStyle(theme.workspaceText)
+            Text(detail)
+                .font(DeckFont.footnote)
+                .foregroundStyle(theme.workspaceText.opacity(0.58))
+                .multilineTextAlignment(.center)
+            Button("View provider console", systemImage: "terminal", action: onOpenConsole)
+                .font(DeckFont.footnote.weight(.semibold))
+                .foregroundStyle(theme.accent)
+                .padding(.top, DeckSpace.xxs)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DeckSpace.xl)
+        .padding(.horizontal, DeckSpace.l)
+        .background(theme.workspaceSurface.opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DeckRadius.hero, style: .continuous)
+                .stroke(theme.workspaceRule, lineWidth: 0.75)
+        }
+    }
+
+    private var title: String {
+        state.isTerminal ? "No structured activity captured" : "Waiting for (agentName)"
+    }
+
+    private var detail: String {
+        state.isTerminal
+            ? "Provider diagnostics remain available in the console."
+            : "Messages, commands, file edits, and approvals will appear here as native cards."
     }
 }
 
@@ -324,7 +379,7 @@ private struct SessionWorkspaceSummary: View {
 
     @ViewBuilder private var actionButtons: some View {
         Button(action: onOpenChanges) {
-            Label("Review Changes", systemImage: "plusminus")
+            Label(changedFileCount == 0 ? "No File Changes" : "Review Changes", systemImage: "plusminus")
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
         }
@@ -333,6 +388,8 @@ private struct SessionWorkspaceSummary: View {
         .foregroundStyle(theme.workspaceBackground)
         .background(theme.workspaceText)
         .clipShape(RoundedRectangle(cornerRadius: DeckRadius.card, style: .continuous))
+        .disabled(changedFileCount == 0)
+        .opacity(changedFileCount == 0 ? 0.48 : 1)
 
         Button(action: onOpenConsole) {
             Label("Open Raw Console", systemImage: "terminal")

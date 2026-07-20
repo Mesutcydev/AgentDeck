@@ -75,6 +75,19 @@ public enum AgentEnvironment {
         )
     }
 
+    /// Parses the NUL-delimited output produced by `/usr/bin/env -0`.
+    /// Values may contain `=`; only the first separator belongs to the key.
+    /// Empty and malformed entries are ignored.
+    public static func parseNullSeparatedEnvironment(_ output: String) -> [String: String] {
+        output.split(separator: "\0").reduce(into: [:]) { environment, entry in
+            let fields = entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard fields.count == 2 else { return }
+            let key = String(fields[0])
+            guard !key.isEmpty else { return }
+            environment[key] = String(fields[1])
+        }
+    }
+
     private static func isAllowed(
         _ key: String,
         additionalKeys: Set<String>,

@@ -12,6 +12,18 @@ import Testing
 
 @Suite("agent environment allowlist")
 struct AgentEnvironmentTests {
+    @Test("NUL environment parser preserves values containing equals signs")
+    func parsesNullSeparatedEnvironment() {
+        let parsed = AgentEnvironment.parseNullSeparatedEnvironment(
+            "PATH=/usr/bin\0ANTHROPIC_AUTH_TOKEN=token=with=equals\0MALFORMED\0=empty\0"
+        )
+
+        #expect(parsed == [
+            "PATH": "/usr/bin",
+            "ANTHROPIC_AUTH_TOKEN": "token=with=equals"
+        ])
+    }
+
     private let base: [String: String] = [
         "PATH": "/usr/bin:/bin",
         "HOME": "/Users/test",
